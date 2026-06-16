@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brookhaven accent blue (#2d6be4) */
+    --primary: 220 77% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 40% 96%;
+    --secondary-foreground: 222 47% 16%;
+
+    --muted: 220 40% 96%;
+    --muted-foreground: 218 19% 43%;
+
+    --accent: 220 60% 95%;
+    --accent-foreground: 220 77% 40%;
+
+    /* Sold / destructive red (#c0392b) */
+    --destructive: 6 63% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 221 39% 90%;
+    --input: 221 39% 90%;
+    --ring: 220 77% 53%;
+
+    --radius: 0.65rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-brand-light text-brand-text antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* All numeric/currency cells lean on tabular figures for clean alignment. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Subtle, branded scrollbar for dense data surfaces. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #c3cde2 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #c3cde2;
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Hide scrollbar but keep scroll (used by the mobile filter sheet). */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

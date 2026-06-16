@@ -3,24 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Download, Filter, RotateCcw, SearchX, Upload } from 'lucide-react';
+import { Download, RotateCcw, SearchX, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { TopBar } from '@/components/layout/TopBar';
 import { StatsBar } from '@/components/organisms/StatsBar';
-import { FilterSidebar } from '@/components/organisms/FilterSidebar';
+import { FilterBar } from '@/components/organisms/FilterBar';
 import { ListingsTable } from '@/components/organisms/ListingsTable';
 import { ListingDetailDrawer } from '@/components/organisms/ListingDetailDrawer';
 import { SearchBar } from '@/components/molecules/SearchBar';
-import { FilterChip } from '@/components/atoms/FilterChip';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import {
   Select,
   SelectContent,
@@ -28,10 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 
 import {
-  deriveActiveChips,
   filtersToApiQuery,
   parseFilters,
   serializeFilters,
@@ -55,7 +46,6 @@ export function ListingsView() {
     [searchParams],
   );
   const apiQuery = useMemo(() => filtersToApiQuery(filters), [filters]);
-  const chips = useMemo(() => deriveActiveChips(filters), [filters]);
 
   const [data, setData] = useState<ListingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +55,6 @@ export function ListingsView() {
   const [counties, setCounties] = useState<CountyOption[]>([]);
   const [selected, setSelected] = useState<Listing | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const reqId = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
@@ -126,7 +115,6 @@ export function ListingsView() {
 
   const clearAll = useCallback(() => {
     router.push(pathname, { scroll: false });
-    setMobileFiltersOpen(false);
   }, [pathname, router]);
 
   const handleExport = useCallback(() => {
@@ -156,30 +144,9 @@ export function ListingsView() {
   const showSkeleton = loading && !hasLoaded;
   const showEmpty = hasLoaded && !loading && listings.length === 0 && !errored;
 
-  const sidebar = (
-    <FilterSidebar
-      filters={filters}
-      counties={counties}
-      onChange={update}
-      onClear={clearAll}
-    />
-  );
-
   return (
     <>
       <TopBar title="RETT Opportunities" breadcrumb="Brookhaven · Internal Tools">
-        <Button
-          variant="outline"
-          size="sm"
-          className="lg:hidden"
-          onClick={() => setMobileFiltersOpen(true)}
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-          {chips.length > 0 && (
-            <Badge className="ml-1 h-5 px-1.5">{chips.length}</Badge>
-          )}
-        </Button>
         <Button asChild variant="outline" size="sm">
           <Link href="/admin">
             <Upload className="h-4 w-4" />
@@ -192,126 +159,91 @@ export function ListingsView() {
         </Button>
       </TopBar>
 
-      <div className="flex gap-6 px-5 py-5 lg:px-8">
-        {/* Desktop filter rail */}
-        <aside className="hidden w-[240px] shrink-0 lg:block">
-          <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-thin pr-1">
-            {sidebar}
-          </div>
-        </aside>
+      <div className="mx-auto w-full max-w-[1680px] px-5 py-5 lg:px-8">
+        <StatsBar stats={stats} loading={!stats} className="mb-5" />
 
-        {/* Main column */}
-        <div className="min-w-0 flex-1">
-          <StatsBar stats={stats} loading={!stats} className="mb-4" />
+        {/* Toolbar: search + filter pills */}
+        <div className="mb-4 flex flex-col gap-3">
+          <SearchBar
+            value={filters.q}
+            onChange={(q) => update({ q })}
+            resultCount={hasLoaded ? total : undefined}
+          />
+          <FilterBar
+            filters={filters}
+            counties={counties}
+            onChange={update}
+            onClear={clearAll}
+          />
+        </div>
 
-          <div className="mb-3">
-            <SearchBar
-              value={filters.q}
-              onChange={(q) => update({ q })}
-              resultCount={hasLoaded ? total : undefined}
-            />
-          </div>
+        {showSkeleton ? (
+          <TableSkeleton />
+        ) : errored ? (
+          <ErrorState onRetry={() => setReloadKey((k) => k + 1)} />
+        ) : showEmpty ? (
+          <EmptyState onClear={clearAll} />
+        ) : (
+          <ListingsTable
+            listings={listings}
+            sort={filters.sort}
+            onSortChange={(sort) => update({ sort })}
+            onRowClick={openListing}
+            loading={loading}
+          />
+        )}
 
-          {chips.length > 0 && (
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              {chips.map((chip) => (
-                <FilterChip
-                  key={chip.key}
-                  label={chip.label}
-                  onRemove={() => update(chip.patch)}
-                />
-              ))}
-              <button
-                type="button"
-                onClick={clearAll}
-                className="text-xs font-medium text-brand-muted underline-offset-2 hover:text-brand-accent hover:underline"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
-
-          {showSkeleton ? (
-            <TableSkeleton />
-          ) : errored ? (
-            <ErrorState onRetry={() => setReloadKey((k) => k + 1)} />
-          ) : showEmpty ? (
-            <EmptyState onClear={clearAll} />
-          ) : (
-            <ListingsTable
-              listings={listings}
-              sort={filters.sort}
-              onSortChange={(sort) => update({ sort })}
-              onRowClick={openListing}
-              loading={loading}
-            />
-          )}
-
-          {/* Pagination */}
-          {!showSkeleton && !errored && listings.length > 0 && (
-            <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
-              <p className="text-sm text-brand-muted tabular-nums">
-                Showing {formatNumber(rangeStart)}–{formatNumber(rangeEnd)} of{' '}
-                {formatNumber(total)}
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-brand-muted">Rows</span>
-                  <Select
-                    value={String(filters.limit)}
-                    onValueChange={(v) => update({ limit: Number(v), page: 1 })}
-                  >
-                    <SelectTrigger className="h-8 w-[72px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAGE_SIZE_OPTIONS.map((n) => (
-                        <SelectItem key={n} value={String(n)}>
-                          {n}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => update({ page: page - 1 })}
-                  >
-                    Previous
-                  </Button>
-                  <span className="px-1 text-sm text-brand-muted tabular-nums">
-                    {page} / {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => update({ page: page + 1 })}
-                  >
-                    Next
-                  </Button>
-                </div>
+        {/* Pagination */}
+        {!showSkeleton && !errored && listings.length > 0 && (
+          <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+            <p className="text-sm text-brand-muted tabular-nums">
+              Showing {formatNumber(rangeStart)}–{formatNumber(rangeEnd)} of{' '}
+              {formatNumber(total)}
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-brand-muted">Rows</span>
+                <Select
+                  value={String(filters.limit)}
+                  onValueChange={(v) => update({ limit: Number(v), page: 1 })}
+                >
+                  <SelectTrigger className="h-8 w-[72px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => update({ page: page - 1 })}
+                >
+                  Previous
+                </Button>
+                <span className="px-1 text-sm text-brand-muted tabular-nums">
+                  {page} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => update({ page: page + 1 })}
+                >
+                  Next
+                </Button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-
-      {/* Mobile filter sheet */}
-      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-        <SheetContent
-          side="left"
-          className="w-[300px] overflow-y-auto scrollbar-thin p-5"
-        >
-          <SheetHeader className="mb-4">
-            <SheetTitle>Filters</SheetTitle>
-          </SheetHeader>
-          {sidebar}
-        </SheetContent>
-      </Sheet>
 
       <ListingDetailDrawer
         listing={selected}

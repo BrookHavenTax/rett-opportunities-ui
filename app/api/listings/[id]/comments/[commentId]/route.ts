@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { dbConnect } from '@/lib/mongodb';
 import { ListingModel, serializeListing, type IListing } from '@/lib/models/Listing';
-import { commentBodySchema } from '@/lib/schemas/listing';
+import { commentPatchSchema } from '@/lib/schemas/listing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,7 +27,7 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const parsed = commentBodySchema.safeParse(body);
+    const parsed = commentPatchSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.issues[0]?.message ?? 'Invalid note' },
@@ -46,7 +46,8 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json({ error: 'Note not found' }, { status: 404 });
     }
 
-    comment.body = parsed.data.body;
+    if (parsed.data.body !== undefined) comment.body = parsed.data.body;
+    if (parsed.data.pinned !== undefined) comment.pinned = parsed.data.pinned;
     await listing.save();
 
     return NextResponse.json(serializeListing(listing.toObject() as IListing));

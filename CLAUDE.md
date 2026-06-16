@@ -95,12 +95,17 @@ existing active listing's staff data):
   Also a **filter pill** (`outreachedBy` filter, supports the `Unassigned`
   sentinel via `OUTREACH_UNASSIGNED`). Edited via `PATCH /api/listings/[id]`.
 - **`comments`** — a timestamped notes thread (Mongoose subdocs with their own
-  `_id` + timestamps). Viewed/added/edited/deleted in a modal (`NotesDialog` from
-  the table's Notes column) and in the drawer (`NotesPanel`, the shared inner UI).
-  CRUD via `POST /api/listings/[id]/comments` and
-  `PATCH|DELETE /api/listings/[id]/comments/[commentId]`. Each mutation returns
-  the full updated `Listing`; `ListingsView.updateListingLocal` syncs the table,
-  drawer, and modal from that.
+  `_id` + timestamps + a `pinned` flag). Viewed/added/edited/deleted/**pinned** in
+  a modal (`NotesDialog` from the table's Notes column) and in the drawer
+  (`NotesPanel`, the shared inner UI). Pinned notes sort to the top (gold styling).
+  CRUD via `POST /api/listings/[id]/comments` (body) and
+  `PATCH|DELETE /api/listings/[id]/comments/[commentId]` (PATCH accepts `body`
+  and/or `pinned`). Each mutation returns the full updated `Listing`;
+  `ListingsView.updateListingLocal` syncs the table, drawer, and modal from that.
+  There is **no separate "import note" block** — the Excel import note
+  (`listing.notes`) is surfaced as a **pinned note** (the seed + import pipeline
+  create it as `{ body: notes, pinned: true }`). `listing.notes` is still kept as
+  the raw import value for CSV export / the permalink page.
 
 Note on the query builder: geo and outreach filters both use `$or`, so
 `lib/query.ts` composes OR-groups under a single `$and` (never two top-level

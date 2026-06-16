@@ -1,6 +1,19 @@
 import mongoose, { Schema, model, models, type Model, type Types } from 'mongoose';
-import type { Listing, ListingStatus, PropertyType } from '@/types/listing';
-import { PROPERTY_TYPES, LISTING_STATUSES } from '@/types/listing';
+import type {
+  Listing,
+  ListingComment,
+  ListingStatus,
+  OutreachedBy,
+  PropertyType,
+} from '@/types/listing';
+import { PROPERTY_TYPES, LISTING_STATUSES, OUTREACH_OPTIONS } from '@/types/listing';
+
+export interface IComment {
+  _id: Types.ObjectId;
+  body: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface IListing {
   _id: Types.ObjectId;
@@ -17,6 +30,8 @@ export interface IListing {
   rettApplicable?: boolean;
   notes?: string;
   status: ListingStatus;
+  outreachedBy?: OutreachedBy | null;
+  comments: Types.DocumentArray<IComment>;
   importedAt: Date;
   importRunId?: Types.ObjectId | null;
   soldDate?: Date | null;
@@ -24,6 +39,11 @@ export interface IListing {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const CommentSchema = new Schema<IComment>(
+  { body: { type: String, required: true, trim: true, maxlength: 4000 } },
+  { timestamps: true },
+);
 
 const ListingSchema = new Schema<IListing>(
   {
@@ -51,6 +71,13 @@ const ListingSchema = new Schema<IListing>(
       default: 'new',
       index: true,
     },
+    outreachedBy: {
+      type: String,
+      enum: [...OUTREACH_OPTIONS, null],
+      default: null,
+      index: true,
+    },
+    comments: { type: [CommentSchema], default: [] },
     importedAt: { type: Date, required: true, default: Date.now, index: true },
     importRunId: { type: Schema.Types.ObjectId, ref: 'ImportRun', default: null },
     soldDate: { type: Date, default: null },
@@ -105,6 +132,15 @@ export function serializeListing(doc: RawListing): Listing {
     rettApplicable: doc.rettApplicable ?? false,
     notes: doc.notes ?? null,
     status: (doc.status ?? 'new') as ListingStatus,
+    outreachedBy: (doc.outreachedBy as OutreachedBy | null | undefined) ?? null,
+    comments: (doc.comments ?? []).map(
+      (c): ListingComment => ({
+        id: String(c._id),
+        body: c.body ?? '',
+        createdAt: iso(c.createdAt) ?? new Date(0).toISOString(),
+        updatedAt: iso(c.updatedAt) ?? new Date(0).toISOString(),
+      }),
+    ),
     importedAt: iso(doc.importedAt) ?? new Date(0).toISOString(),
     importRunId: doc.importRunId ? String(doc.importRunId) : null,
     soldDate: iso(doc.soldDate),

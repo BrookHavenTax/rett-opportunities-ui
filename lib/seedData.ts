@@ -1,7 +1,8 @@
 import type { Types } from 'mongoose';
 import { ListingModel } from '@/lib/models/Listing';
 import { ImportRunModel } from '@/lib/models/ImportRun';
-import type { ListingStatus, PropertyType } from '@/types/listing';
+import type { ListingStatus, OutreachedBy, PropertyType } from '@/types/listing';
+import { OUTREACH_OPTIONS } from '@/types/listing';
 
 /**
  * Deterministic sample-data generator. Produces 50 realistic RETT listings
@@ -80,6 +81,16 @@ const NOTES_POOL = [
   '',
 ];
 
+const COMMENTS_POOL = [
+  'Called the listing agent — awaiting a callback.',
+  'Owner open to a quick close. Following up next week.',
+  'Left a voicemail; will retry Monday.',
+  'Sent intro email with our offer range.',
+  'Comparable on the same street closed above ask — strong signal.',
+  'Spoke with the owner; they want to think it over.',
+  'Scheduled a walkthrough for next Tuesday.',
+];
+
 function weightedType(r: number): PropertyType {
   let acc = 0;
   for (const p of PROP_TYPES) {
@@ -120,6 +131,8 @@ interface GeneratedListing {
   rettApplicable: boolean;
   notes?: string;
   status: ListingStatus;
+  outreachedBy?: OutreachedBy;
+  comments: { body: string }[];
   importedAt: Date;
   runKey: SeedRun['key'];
   soldDate?: Date;
@@ -182,6 +195,17 @@ export function generateListings(): GeneratedListing[] {
     const noteIdx = Math.floor(rng() * NOTES_POOL.length);
     const note = NOTES_POOL[noteIdx] || undefined;
 
+    // ~60% of listings have an outreach owner; rest are unassigned.
+    const outreachedBy =
+      rng() < 0.6
+        ? OUTREACH_OPTIONS[Math.floor(rng() * OUTREACH_OPTIONS.length)]
+        : undefined;
+    // ~40% have one or two staff notes.
+    const commentCount = rng() < 0.4 ? 1 + Math.floor(rng() * 2) : 0;
+    const comments = Array.from({ length: commentCount }, () => ({
+      body: COMMENTS_POOL[Math.floor(rng() * COMMENTS_POOL.length)] ?? '',
+    }));
+
     listings.push({
       address,
       streetAddress,
@@ -196,6 +220,8 @@ export function generateListings(): GeneratedListing[] {
       rettApplicable: rng() < 0.72,
       notes: note,
       status,
+      outreachedBy,
+      comments,
       importedAt,
       runKey,
       soldDate,
@@ -265,6 +291,8 @@ export async function seedDatabase(opts: { reset?: boolean } = {}): Promise<{
       // Only set mlsNumber when present (preserve sparse-unique index).
       if (l.mlsNumber) doc.mlsNumber = l.mlsNumber;
       if (l.notes) doc.notes = l.notes;
+      if (l.outreachedBy) doc.outreachedBy = l.outreachedBy;
+      if (l.comments.length) doc.comments = l.comments;
       if (l.soldDate) doc.soldDate = l.soldDate;
       if (l.soldRunKey) doc.soldImportRunId = runIdByKey.get(l.soldRunKey);
       return doc;

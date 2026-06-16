@@ -11,6 +11,7 @@ import { StatsBar } from '@/components/organisms/StatsBar';
 import { FilterBar } from '@/components/organisms/FilterBar';
 import { ListingsTable } from '@/components/organisms/ListingsTable';
 import { ListingDetailDrawer } from '@/components/organisms/ListingDetailDrawer';
+import { NotesDialog } from '@/components/organisms/NotesDialog';
 import { SearchBar } from '@/components/molecules/SearchBar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +34,7 @@ import type {
   CountyOption,
   Listing,
   ListingsResponse,
+  OutreachedBy,
   Stats,
 } from '@/types/listing';
 
@@ -55,6 +57,8 @@ export function ListingsView() {
   const [counties, setCounties] = useState<CountyOption[]>([]);
   const [selected, setSelected] = useState<Listing | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notesListing, setNotesListing] = useState<Listing | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
 
   const reqId = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
@@ -133,6 +137,46 @@ export function ListingsView() {
     setDrawerOpen(true);
   }, []);
 
+  /* ── Mutations: keep the table, drawer, and notes modal in sync ── */
+  const updateListingLocal = useCallback((updated: Listing) => {
+    setData((d) =>
+      d
+        ? {
+            ...d,
+            listings: d.listings.map((l) =>
+              l.id === updated.id ? updated : l,
+            ),
+          }
+        : d,
+    );
+    setSelected((s) => (s && s.id === updated.id ? updated : s));
+    setNotesListing((n) => (n && n.id === updated.id ? updated : n));
+  }, []);
+
+  const setOutreach = useCallback(
+    async (listing: Listing, value: OutreachedBy | null) => {
+      updateListingLocal({ ...listing, outreachedBy: value }); // optimistic
+      try {
+        const res = await fetch(`/api/listings/${listing.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ outreachedBy: value }),
+        });
+        if (!res.ok) throw new Error('bad status');
+        updateListingLocal((await res.json()) as Listing);
+      } catch {
+        updateListingLocal(listing); // revert on failure
+        toast.error('Could not update outreach. Try again.');
+      }
+    },
+    [updateListingLocal],
+  );
+
+  const openNotes = useCallback((listing: Listing) => {
+    setNotesListing(listing);
+    setNotesOpen(true);
+  }, []);
+
   /* ── Derived pagination figures ── */
   const total = data?.total ?? 0;
   const page = data?.page ?? filters.page;
@@ -189,6 +233,8 @@ export function ListingsView() {
             sort={filters.sort}
             onSortChange={(sort) => update({ sort })}
             onRowClick={openListing}
+            onSetOutreach={setOutreach}
+            onOpenNotes={openNotes}
             loading={loading}
           />
         )}
@@ -249,6 +295,15 @@ export function ListingsView() {
         listing={selected}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        onSetOutreach={setOutreach}
+        onListingUpdate={updateListingLocal}
+      />
+
+      <NotesDialog
+        listing={notesListing}
+        open={notesOpen}
+        onOpenChange={setNotesOpen}
+        onChange={updateListingLocal}
       />
     </>
   );

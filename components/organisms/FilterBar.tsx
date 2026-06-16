@@ -13,6 +13,7 @@ import {
   MapPin,
   Percent,
   TrendingUp,
+  UserRound,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -47,6 +48,8 @@ import {
 import {
   LISTING_STATUSES,
   PROPERTY_TYPES,
+  OUTREACH_OPTIONS,
+  OUTREACH_UNASSIGNED,
   type CountyOption,
   type ListingStatus,
   type PropertyType,
@@ -117,6 +120,13 @@ export function FilterBar({
         : [...filters.counties, key],
     });
 
+  const toggleOutreach = (name: string) =>
+    onChange({
+      outreachedBy: filters.outreachedBy.includes(name)
+        ? filters.outreachedBy.filter((x) => x !== name)
+        : [...filters.outreachedBy, name],
+    });
+
   /* ── Active state + value summaries ── */
   const statusActive = !sameSet(filters.status, DEFAULT_FILTERS.status);
   const countyActive = filters.counties.length > 0;
@@ -126,6 +136,7 @@ export function FilterBar({
   const pctActive = filters.profitPctMin !== null || filters.profitPctMax !== null;
   const dateActive = !!(filters.dateFrom || filters.dateTo);
   const typeActive = filters.propertyTypes.length > 0;
+  const outreachActive = filters.outreachedBy.length > 0;
   const domActive = filters.daysOnMarket !== 'any';
   const rettActive = filters.rettApplicable !== 'all';
 
@@ -137,6 +148,7 @@ export function FilterBar({
     pctActive ||
     dateActive ||
     typeActive ||
+    outreachActive ||
     domActive ||
     rettActive;
 
@@ -332,6 +344,32 @@ export function FilterBar({
               label={t}
               checked={filters.propertyTypes.includes(t)}
               onChange={(c) => togglePropertyType(t, c)}
+            />
+          ))}
+        </PopoverSection>
+      </FilterPill>
+
+      {/* Outreached by */}
+      <FilterPill
+        icon={UserRound}
+        label="Outreached"
+        active={outreachActive}
+        valueText={filters.outreachedBy.join(', ')}
+        onClear={() => onChange({ outreachedBy: [] })}
+        contentClassName="w-52"
+      >
+        <PopoverSection title="Outreached by">
+          <CheckRow
+            label="Unassigned"
+            checked={filters.outreachedBy.includes(OUTREACH_UNASSIGNED)}
+            onChange={() => toggleOutreach(OUTREACH_UNASSIGNED)}
+          />
+          {OUTREACH_OPTIONS.map((name) => (
+            <CheckRow
+              key={name}
+              label={name}
+              checked={filters.outreachedBy.includes(name)}
+              onChange={() => toggleOutreach(name)}
             />
           ))}
         </PopoverSection>

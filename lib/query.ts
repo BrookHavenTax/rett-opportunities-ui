@@ -98,20 +98,14 @@ function domRange(bucket: string | undefined): Record<string, number> | null {
   }
 }
 
-/** Second-stage `$match` for the computed profit fields, if requested. */
+/** Second-stage `$match` for the computed profit % field, if requested. */
 function buildProfitMatch(q: ParsedListingsQuery): Record<string, unknown> | null {
-  const profit: Record<string, number> = {};
-  if (q.minProfit !== undefined) profit.$gte = q.minProfit;
-  if (q.maxProfit !== undefined) profit.$lte = q.maxProfit;
-
   const pct: Record<string, number> = {};
   if (q.minProfitPct !== undefined) pct.$gte = q.minProfitPct;
   if (q.maxProfitPct !== undefined) pct.$lte = q.maxProfitPct;
 
-  const match: Record<string, unknown> = {};
-  if (Object.keys(profit).length) match.profit = profit;
-  if (Object.keys(pct).length) match.profitPct = pct;
-  return Object.keys(match).length ? match : null;
+  if (!Object.keys(pct).length) return null;
+  return { profitPct: pct };
 }
 
 export interface BuiltPipeline {

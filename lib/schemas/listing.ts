@@ -37,8 +37,6 @@ export interface ParsedListingsQuery {
   state?: string;
   minPrice?: number;
   maxPrice?: number;
-  minProfit?: number;
-  maxProfit?: number;
   minProfitPct?: number;
   maxProfitPct?: number;
   propertyType: string[];
@@ -129,8 +127,6 @@ export function parseListingsQuery(
     state: searchParams.get('state')?.trim().toUpperCase() || undefined,
     minPrice: num(searchParams.get('minPrice')),
     maxPrice: num(searchParams.get('maxPrice')),
-    minProfit: num(searchParams.get('minProfit')),
-    maxProfit: num(searchParams.get('maxProfit')),
     minProfitPct: num(searchParams.get('minProfitPct')),
     maxProfitPct: num(searchParams.get('maxProfitPct')),
     propertyType: propertyTypeRaw,

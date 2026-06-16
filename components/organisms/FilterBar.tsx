@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   BadgeCheck,
   Building2,
   CalendarDays,
@@ -30,16 +32,13 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { PriceRangeSlider } from '@/components/molecules/PriceRangeSlider';
-import { cn, formatCompactCurrency, formatSignedCurrency } from '@/lib/utils';
+import { cn, formatCompactCurrency } from '@/lib/utils';
 import {
   DAYS_ON_MARKET_OPTIONS,
   DEFAULT_FILTERS,
   PRICE_MIN,
   PRICE_MAX,
   PRICE_STEP,
-  PROFIT_MIN,
-  PROFIT_MAX,
-  PROFIT_STEP,
   countyKey,
   parseCountyKey,
   type FilterState,
@@ -132,7 +131,7 @@ export function FilterBar({
   const countyActive = filters.counties.length > 0;
   const countyNames = filters.counties.map((k) => parseCountyKey(k).county);
   const priceActive = filters.priceMin > PRICE_MIN || filters.priceMax < PRICE_MAX;
-  const profitActive = filters.profitMin !== null || filters.profitMax !== null;
+  const profitSorted = filters.sort.field === 'profit';
   const pctActive = filters.profitPctMin !== null || filters.profitPctMax !== null;
   const dateActive = !!(filters.dateFrom || filters.dateTo);
   const typeActive = filters.propertyTypes.length > 0;
@@ -144,7 +143,6 @@ export function FilterBar({
     statusActive ||
     countyActive ||
     priceActive ||
-    profitActive ||
     pctActive ||
     dateActive ||
     typeActive ||
@@ -240,31 +238,54 @@ export function FilterBar({
         </PopoverSection>
       </FilterPill>
 
-      {/* Est. Profit ($) */}
-      <FilterPill
-        icon={TrendingUp}
-        label="Profit"
-        active={profitActive}
-        valueText={rangeLabel(filters.profitMin, filters.profitMax, formatSignedCurrency)}
-        onClear={() => onChange({ profitMin: null, profitMax: null })}
-        contentClassName="w-72"
+      {/* Profit — one-click sort (highest → lowest); body toggles direction, × resets */}
+      <div
+        className={cn(
+          'inline-flex items-center rounded-full border text-sm transition-colors',
+          profitSorted
+            ? 'border-brand-accent bg-[#e8f0fe] text-brand-accent'
+            : 'border-brand-border bg-white text-brand-muted hover:border-brand-accent/50 hover:text-brand-navy',
+        )}
       >
-        <PopoverSection title="Estimated profit">
-          <PriceRangeSlider
-            min={PROFIT_MIN}
-            max={PROFIT_MAX}
-            step={PROFIT_STEP}
-            value={[filters.profitMin ?? PROFIT_MIN, filters.profitMax ?? PROFIT_MAX]}
-            onChange={([a, b]) =>
-              onChange({
-                profitMin: a <= PROFIT_MIN ? null : a,
-                profitMax: b >= PROFIT_MAX ? null : b,
-              })
-            }
-            format={formatSignedCurrency}
-          />
-        </PopoverSection>
-      </FilterPill>
+        <button
+          type="button"
+          onClick={() =>
+            onChange({
+              sort: {
+                field: 'profit',
+                dir: profitSorted && filters.sort.dir === 'desc' ? 'asc' : 'desc',
+              },
+            })
+          }
+          className={cn(
+            'flex items-center gap-1.5 py-1.5 pl-3',
+            profitSorted ? 'pr-2 font-medium' : 'pr-3',
+          )}
+          title="Sort by estimated profit (high → low)"
+        >
+          <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+          <span>Profit</span>
+          {profitSorted ? (
+            filters.sort.dir === 'desc' ? (
+              <ArrowDown className="h-3.5 w-3.5" />
+            ) : (
+              <ArrowUp className="h-3.5 w-3.5" />
+            )
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5 opacity-40" />
+          )}
+        </button>
+        {profitSorted && (
+          <button
+            type="button"
+            onClick={() => onChange({ sort: DEFAULT_FILTERS.sort })}
+            aria-label="Clear profit sort"
+            className="mr-1.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-brand-accent/20"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
 
       {/* Profit % */}
       <FilterPill

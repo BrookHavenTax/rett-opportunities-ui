@@ -204,7 +204,13 @@ export function ListingsView() {
       </TopBar>
 
       <div className="mx-auto w-full max-w-[1680px] px-5 py-5 lg:px-8">
-        <StatsBar stats={stats} loading={!stats} className="mb-5" />
+        <StatsBar
+          stats={stats}
+          loading={!stats}
+          selectedStatus={filters.status}
+          onSelectStatus={(statuses) => update({ status: statuses })}
+          className="mb-5"
+        />
 
         {/* Toolbar: search + filter pills */}
         <div className="mb-4 flex flex-col gap-3">

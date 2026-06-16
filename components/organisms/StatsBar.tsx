@@ -1,5 +1,5 @@
 import { Archive, CircleDot, Database, Sparkles } from 'lucide-react';
-import type { Stats } from '@/types/listing';
+import type { ListingStatus, Stats } from '@/types/listing';
 import { cn, formatNumber } from '@/lib/utils';
 import { StatCard } from '@/components/molecules/StatCard';
 
@@ -7,10 +7,33 @@ export interface StatsBarProps {
   stats: Stats | null;
   loading?: boolean;
   className?: string;
+  /** Current status filter — used to highlight the matching card. */
+  selectedStatus?: ListingStatus[];
+  /** Click a card to filter the table to that status set. */
+  onSelectStatus?: (statuses: ListingStatus[]) => void;
 }
 
-export function StatsBar({ stats, loading, className }: StatsBarProps) {
+const ALL_STATUSES: ListingStatus[] = ['new', 'active', 'sold'];
+
+function sameStatus(
+  a: ListingStatus[] | undefined,
+  b: ListingStatus[],
+): boolean {
+  if (!a || a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((x) => set.has(x));
+}
+
+export function StatsBar({
+  stats,
+  loading,
+  className,
+  selectedStatus,
+  onSelectStatus,
+}: StatsBarProps) {
   const isLoading = loading || stats === null;
+  const click = (statuses: ListingStatus[]) =>
+    onSelectStatus ? () => onSelectStatus(statuses) : undefined;
 
   return (
     <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-4', className)}>
@@ -20,6 +43,8 @@ export function StatsBar({ stats, loading, className }: StatsBarProps) {
         icon={Database}
         tone="blue"
         loading={isLoading}
+        onClick={click(ALL_STATUSES)}
+        active={sameStatus(selectedStatus, ALL_STATUSES)}
       />
       <StatCard
         label="Active"
@@ -27,6 +52,8 @@ export function StatsBar({ stats, loading, className }: StatsBarProps) {
         icon={CircleDot}
         tone="green"
         loading={isLoading}
+        onClick={click(['active'])}
+        active={sameStatus(selectedStatus, ['active'])}
       />
       <StatCard
         label="New This Month"
@@ -34,6 +61,8 @@ export function StatsBar({ stats, loading, className }: StatsBarProps) {
         icon={Sparkles}
         tone="gold"
         loading={isLoading}
+        onClick={click(['new'])}
+        active={sameStatus(selectedStatus, ['new'])}
       />
       <StatCard
         label="Sold / Archived"
@@ -41,6 +70,8 @@ export function StatsBar({ stats, loading, className }: StatsBarProps) {
         icon={Archive}
         tone="red"
         loading={isLoading}
+        onClick={click(['sold'])}
+        active={sameStatus(selectedStatus, ['sold'])}
       />
     </div>
   );

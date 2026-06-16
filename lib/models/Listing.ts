@@ -11,6 +11,7 @@ import { PROPERTY_TYPES, LISTING_STATUSES, OUTREACH_OPTIONS } from '@/types/list
 export interface IComment {
   _id: Types.ObjectId;
   body: string;
+  pinned: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,7 +42,10 @@ export interface IListing {
 }
 
 const CommentSchema = new Schema<IComment>(
-  { body: { type: String, required: true, trim: true, maxlength: 4000 } },
+  {
+    body: { type: String, required: true, trim: true, maxlength: 4000 },
+    pinned: { type: Boolean, default: false },
+  },
   { timestamps: true },
 );
 
@@ -137,6 +141,7 @@ export function serializeListing(doc: RawListing): Listing {
       (c): ListingComment => ({
         id: String(c._id),
         body: c.body ?? '',
+        pinned: c.pinned ?? false,
         createdAt: iso(c.createdAt) ?? new Date(0).toISOString(),
         updatedAt: iso(c.updatedAt) ?? new Date(0).toISOString(),
       }),

@@ -116,6 +116,7 @@ interface PreparedNew {
     daysOnMarket?: number | null;
     rettApplicable: boolean;
     notes?: string;
+    comments?: { body: string; pinned: boolean }[];
   };
 }
 
@@ -205,7 +206,10 @@ function parseNewListings(
         listingDate: d.listingDate ?? null,
         daysOnMarket: d.daysOnMarket ?? null,
         rettApplicable: d.rettApplicable,
-        ...(d.notes ? { notes: d.notes } : {}),
+        // The import note (if any) is preserved AND surfaced as a pinned note.
+        ...(d.notes
+          ? { notes: d.notes, comments: [{ body: d.notes, pinned: true }] }
+          : {}),
       },
     });
   }

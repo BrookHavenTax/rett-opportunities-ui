@@ -241,7 +241,17 @@ export const patchListingSchema = z.object({
     .nullable(),
 });
 
-/** POST/PATCH comment body. */
+/** POST comment — body required. */
 export const commentBodySchema = z.object({
   body: z.string().trim().min(1, 'Note cannot be empty').max(4000),
 });
+
+/** PATCH comment — edit body and/or toggle pinned (at least one). */
+export const commentPatchSchema = z
+  .object({
+    body: z.string().trim().min(1, 'Note cannot be empty').max(4000).optional(),
+    pinned: z.boolean().optional(),
+  })
+  .refine((d) => d.body !== undefined || d.pinned !== undefined, {
+    message: 'Nothing to update',
+  });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Pin, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -73,20 +73,26 @@ export function NotesPanel({ listing, onChange, className }: NotesPanelProps) {
     await run(fetch(`${base}/${id}`, { method: 'DELETE' }), 'Note deleted');
   }
 
-  // Newest first.
-  const comments = [...listing.comments].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
+  async function togglePin(id: string, pinned: boolean) {
+    await run(
+      fetch(`${base}/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned }),
+      }),
+      pinned ? 'Note pinned' : 'Note unpinned',
+    );
+  }
+
+  // Pinned first, then newest first.
+  const comments = [...listing.comments].sort(
+    (a, b) =>
+      Number(b.pinned) - Number(a.pinned) ||
+      b.createdAt.localeCompare(a.createdAt),
   );
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      {listing.notes && (
-        <div className="rounded-md border border-brand-border bg-brand-light px-3 py-2 text-sm text-brand-muted">
-          <span className="font-semibold text-brand-navy">Import note:</span>{' '}
-          {listing.notes}
-        </div>
-      )}
-
       {/* Composer */}
       <div className="flex flex-col gap-2">
         <Textarea
@@ -117,7 +123,12 @@ export function NotesPanel({ listing, onChange, className }: NotesPanelProps) {
           comments.map((c) => (
             <div
               key={c.id}
-              className="rounded-lg border border-brand-border bg-white p-3"
+              className={cn(
+                'rounded-lg border p-3',
+                c.pinned
+                  ? 'border-brand-gold/50 bg-[#fff8e6]/60'
+                  : 'border-brand-border bg-white',
+              )}
             >
               {editingId === c.id ? (
                 <div className="flex flex-col gap-2">
@@ -149,12 +160,36 @@ export function NotesPanel({ listing, onChange, className }: NotesPanelProps) {
                   <p className="whitespace-pre-wrap text-sm text-brand-text">
                     {c.body}
                   </p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-brand-muted">
-                      {formatDate(c.createdAt)}
-                      {c.updatedAt !== c.createdAt ? ' · edited' : ''}
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-xs text-brand-muted">
+                      {c.pinned && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#fff8e6] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-gold">
+                          <Pin className="h-2.5 w-2.5 fill-current" />
+                          Pinned
+                        </span>
+                      )}
+                      <span>
+                        {formatDate(c.createdAt)}
+                        {c.updatedAt !== c.createdAt ? ' · edited' : ''}
+                      </span>
                     </span>
                     <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => togglePin(c.id, !c.pinned)}
+                        disabled={busy}
+                        aria-label={c.pinned ? 'Unpin note' : 'Pin note'}
+                        className={cn(
+                          'rounded p-1 transition-colors',
+                          c.pinned
+                            ? 'text-brand-gold hover:bg-[#fff8e6]'
+                            : 'text-brand-muted hover:bg-brand-light hover:text-brand-navy',
+                        )}
+                      >
+                        <Pin
+                          className={cn('h-3.5 w-3.5', c.pinned && 'fill-current')}
+                        />
+                      </button>
                       <button
                         type="button"
                         onClick={() => {

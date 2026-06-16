@@ -34,6 +34,7 @@ export const OUTREACH_UNASSIGNED = 'Unassigned';
 export interface ListingComment {
   id: string;
   body: string;
+  pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }

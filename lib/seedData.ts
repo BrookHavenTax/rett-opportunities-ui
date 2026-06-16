@@ -132,7 +132,7 @@ interface GeneratedListing {
   notes?: string;
   status: ListingStatus;
   outreachedBy?: OutreachedBy;
-  comments: { body: string }[];
+  comments: { body: string; pinned: boolean }[];
   importedAt: Date;
   runKey: SeedRun['key'];
   soldDate?: Date;
@@ -200,11 +200,17 @@ export function generateListings(): GeneratedListing[] {
       rng() < 0.6
         ? OUTREACH_OPTIONS[Math.floor(rng() * OUTREACH_OPTIONS.length)]
         : undefined;
-    // ~40% have one or two staff notes.
-    const commentCount = rng() < 0.4 ? 1 + Math.floor(rng() * 2) : 0;
-    const comments = Array.from({ length: commentCount }, () => ({
-      body: COMMENTS_POOL[Math.floor(rng() * COMMENTS_POOL.length)] ?? '',
-    }));
+    // The import note (if any) becomes a pinned note; plus ~40% have one or
+    // two additional unpinned staff notes.
+    const comments: { body: string; pinned: boolean }[] = [];
+    if (note) comments.push({ body: note, pinned: true });
+    const extraCount = rng() < 0.4 ? 1 + Math.floor(rng() * 2) : 0;
+    for (let k = 0; k < extraCount; k++) {
+      comments.push({
+        body: COMMENTS_POOL[Math.floor(rng() * COMMENTS_POOL.length)] ?? '',
+        pinned: false,
+      });
+    }
 
     listings.push({
       address,

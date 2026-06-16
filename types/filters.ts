@@ -44,8 +44,6 @@ export interface FilterState {
   counties: string[];
   priceMin: number;
   priceMax: number;
-  profitMin: number | null;
-  profitMax: number | null;
   profitPctMin: number | null;
   profitPctMax: number | null;
   /** Inclusive month bounds, "YYYY-MM". */
@@ -68,10 +66,6 @@ export const PRICE_MIN = 0;
 export const PRICE_MAX = 5_000_000;
 export const PRICE_STEP = 50_000;
 
-export const PROFIT_MIN = -1_000_000;
-export const PROFIT_MAX = 2_000_000;
-export const PROFIT_STEP = 25_000;
-
 export const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export const DEFAULT_PAGE_SIZE = 50;
 
@@ -92,8 +86,6 @@ export const DEFAULT_FILTERS: FilterState = {
   counties: [],
   priceMin: PRICE_MIN,
   priceMax: PRICE_MAX,
-  profitMin: null,
-  profitMax: null,
   profitPctMin: null,
   profitPctMax: null,
   dateFrom: null,

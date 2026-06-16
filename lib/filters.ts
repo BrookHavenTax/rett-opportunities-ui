@@ -17,7 +17,7 @@ import {
   type ListingStatus,
   type PropertyType,
 } from '@/types/listing';
-import { formatCompactCurrency, formatSignedCurrency } from '@/lib/utils';
+import { formatCompactCurrency } from '@/lib/utils';
 
 /* ────────────────────────────────────────────────────────────────────────
  * Small param helpers
@@ -69,8 +69,6 @@ export function parseFilters(params: URLSearchParams): FilterState {
     counties: csv(params.get('county')),
     priceMin: intOr(params.get('priceMin'), PRICE_MIN),
     priceMax: intOr(params.get('priceMax'), PRICE_MAX),
-    profitMin: intOrNull(params.get('profitMin')),
-    profitMax: intOrNull(params.get('profitMax')),
     profitPctMin: intOrNull(params.get('profitPctMin')),
     profitPctMax: intOrNull(params.get('profitPctMax')),
     dateFrom: params.get('dateFrom') || null,
@@ -95,8 +93,6 @@ export function serializeFilters(f: FilterState): string {
   if (f.counties.length) p.set('county', f.counties.join(','));
   if (f.priceMin !== d.priceMin) p.set('priceMin', String(f.priceMin));
   if (f.priceMax !== d.priceMax) p.set('priceMax', String(f.priceMax));
-  if (f.profitMin !== null) p.set('profitMin', String(f.profitMin));
-  if (f.profitMax !== null) p.set('profitMax', String(f.profitMax));
   if (f.profitPctMin !== null) p.set('profitPctMin', String(f.profitPctMin));
   if (f.profitPctMax !== null) p.set('profitPctMax', String(f.profitPctMax));
   if (f.dateFrom) p.set('dateFrom', f.dateFrom);
@@ -141,8 +137,6 @@ export function filtersToApiQuery(
   if (f.counties.length) p.set('counties', f.counties.join(','));
   if (f.priceMin > PRICE_MIN) p.set('minPrice', String(f.priceMin));
   if (f.priceMax < PRICE_MAX) p.set('maxPrice', String(f.priceMax));
-  if (f.profitMin !== null) p.set('minProfit', String(f.profitMin));
-  if (f.profitMax !== null) p.set('maxProfit', String(f.profitMax));
   if (f.profitPctMin !== null) p.set('minProfitPct', String(f.profitPctMin));
   if (f.profitPctMax !== null) p.set('maxProfitPct', String(f.profitPctMax));
   if (f.propertyTypes.length) p.set('propertyType', f.propertyTypes.join(','));
@@ -212,14 +206,6 @@ export function deriveActiveChips(f: FilterState): ActiveChip[] {
       key: 'price',
       label: `Price: ${formatCompactCurrency(f.priceMin)} – ${formatCompactCurrency(f.priceMax)}`,
       patch: { priceMin: PRICE_MIN, priceMax: PRICE_MAX },
-    });
-  }
-
-  if (f.profitMin !== null || f.profitMax !== null) {
-    chips.push({
-      key: 'profit',
-      label: `Profit: ${rangeLabel(f.profitMin, f.profitMax, formatSignedCurrency)}`,
-      patch: { profitMin: null, profitMax: null },
     });
   }
 

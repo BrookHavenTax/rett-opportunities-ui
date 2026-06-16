@@ -67,6 +67,14 @@ in-memory replica set and seeds on first boot.
   CSV export filename + rows, and the import pipeline (add/archive/skip-empty/
   error-rows/transaction). The import was validated end-to-end against the live API.
 
+## Navigation
+
+There is **no persistent nav sidebar** (removed 2026-06-16 — it ate too much
+horizontal space). Pages are full-width and navigate via top-bar actions:
+Listings has an **Import Excel** button (→ /admin), and Admin has a **Back to
+Listings** button (→ /listings). `AppShell` is just a full-width wrapper now.
+The 240px **filter rail** on /listings is a separate thing and stays.
+
 ## Conventions
 
 - Server brain (lib + API routes) and the page orchestrator are hand-written for

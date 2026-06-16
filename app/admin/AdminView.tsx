@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronRight, History, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, ChevronRight, History, RefreshCw } from 'lucide-react';
 
 import { TopBar } from '@/components/layout/TopBar';
 import { ImportDropzone } from '@/components/organisms/ImportDropzone';
@@ -49,6 +50,12 @@ export function AdminView() {
   return (
     <>
       <TopBar title="Import / Admin" breadcrumb="Brookhaven · RETT Opportunities">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/listings">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Listings
+          </Link>
+        </Button>
         <Button variant="outline" size="sm" onClick={() => void loadRuns()}>
           <RefreshCw className="h-4 w-4" />
           Refresh

@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Download, Filter, RotateCcw, SearchX } from 'lucide-react';
+import { Download, Filter, RotateCcw, SearchX, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { TopBar } from '@/components/layout/TopBar';
@@ -178,6 +179,12 @@ export function ListingsView() {
           {chips.length > 0 && (
             <Badge className="ml-1 h-5 px-1.5">{chips.length}</Badge>
           )}
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/admin">
+            <Upload className="h-4 w-4" />
+            Import Excel
+          </Link>
         </Button>
         <Button size="sm" onClick={handleExport}>
           <Download className="h-4 w-4" />

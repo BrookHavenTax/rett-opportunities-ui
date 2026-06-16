@@ -76,6 +76,7 @@ export function parseFilters(params: URLSearchParams): FilterState {
     dateFrom: params.get('dateFrom') || null,
     dateTo: params.get('dateTo') || null,
     propertyTypes,
+    outreachedBy: csv(params.get('outreached')),
     daysOnMarket,
     rettApplicable,
     q: params.get('q') ?? '',
@@ -101,6 +102,7 @@ export function serializeFilters(f: FilterState): string {
   if (f.dateFrom) p.set('dateFrom', f.dateFrom);
   if (f.dateTo) p.set('dateTo', f.dateTo);
   if (f.propertyTypes.length) p.set('type', f.propertyTypes.join(','));
+  if (f.outreachedBy.length) p.set('outreached', f.outreachedBy.join(','));
   if (f.daysOnMarket !== 'any') p.set('dom', f.daysOnMarket);
   if (f.rettApplicable !== 'all') p.set('rett', f.rettApplicable);
   if (f.q.trim()) p.set('q', f.q.trim());
@@ -144,6 +146,7 @@ export function filtersToApiQuery(
   if (f.profitPctMin !== null) p.set('minProfitPct', String(f.profitPctMin));
   if (f.profitPctMax !== null) p.set('maxProfitPct', String(f.profitPctMax));
   if (f.propertyTypes.length) p.set('propertyType', f.propertyTypes.join(','));
+  if (f.outreachedBy.length) p.set('outreachedBy', f.outreachedBy.join(','));
   if (f.daysOnMarket !== 'any') p.set('daysOnMarket', f.daysOnMarket);
   if (f.rettApplicable !== 'all')
     p.set('rettApplicable', f.rettApplicable === 'yes' ? 'true' : 'false');
@@ -241,6 +244,14 @@ export function deriveActiveChips(f: FilterState): ActiveChip[] {
       key: 'type',
       label: `Type: ${f.propertyTypes.join(', ')}`,
       patch: { propertyTypes: [] },
+    });
+  }
+
+  if (f.outreachedBy.length) {
+    chips.push({
+      key: 'outreach',
+      label: `Outreach: ${f.outreachedBy.join(', ')}`,
+      patch: { outreachedBy: [] },
     });
   }
 

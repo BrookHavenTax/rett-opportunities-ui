@@ -1,5 +1,5 @@
 import type { PipelineStage } from 'mongoose';
-import type { ParsedListingsQuery } from '@/lib/schemas/listing';
+import { UNASSIGNED, type ParsedListingsQuery } from '@/lib/schemas/listing';
 import type { SortField } from '@/types/filters';
 
 /**
@@ -27,19 +27,34 @@ const SORT_FIELD_MAP: Record<SortField, string> = {
 /** Build the first-stage `$match` (filters that do not need computed fields). */
 function buildBaseMatch(q: ParsedListingsQuery): Record<string, unknown> {
   const match: Record<string, unknown> = {};
+  // Each `$or` group is collected under `$and` so multiple OR-filters (geo +
+  // outreach) compose correctly instead of clobbering a single top-level `$or`.
+  const and: Record<string, unknown>[] = [];
 
   if (q.status.length > 0) match.status = { $in: q.status };
 
   // Geo: prefer precise "County|ST" pairs; otherwise fall back to county/state.
   if (q.countyKeys.length > 0) {
-    match.$or = q.countyKeys.map((k) =>
-      k.state ? { county: k.county, state: k.state } : { county: k.county },
-    );
+    and.push({
+      $or: q.countyKeys.map((k) =>
+        k.state ? { county: k.county, state: k.state } : { county: k.county },
+      ),
+    });
   } else if (q.county.length > 0) {
     match.county = { $in: q.county };
     if (q.state) match.state = q.state;
   } else if (q.state) {
     match.state = q.state;
+  }
+
+  // Outreach: specific staff name(s) and/or unassigned.
+  if (q.outreachedBy.length > 0) {
+    const names = q.outreachedBy.filter((o) => o !== UNASSIGNED);
+    const wantsUnassigned = q.outreachedBy.includes(UNASSIGNED);
+    const or: Record<string, unknown>[] = [];
+    if (names.length) or.push({ outreachedBy: { $in: names } });
+    if (wantsUnassigned) or.push({ outreachedBy: null });
+    if (or.length) and.push({ $or: or });
   }
 
   // Listing price range.
@@ -64,6 +79,7 @@ function buildBaseMatch(q: ParsedListingsQuery): Record<string, unknown> {
   // Full-text search (must live in the first $match stage).
   if (q.q) match.$text = { $search: q.q };
 
+  if (and.length) match.$and = and;
   return match;
 }
 

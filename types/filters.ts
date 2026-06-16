@@ -52,6 +52,8 @@ export interface FilterState {
   dateFrom: string | null;
   dateTo: string | null;
   propertyTypes: PropertyType[];
+  /** Outreach owners to filter by; may include the "Unassigned" sentinel. */
+  outreachedBy: string[];
   daysOnMarket: DaysOnMarketBucket;
   rettApplicable: RettFilter;
   q: string;
@@ -97,6 +99,7 @@ export const DEFAULT_FILTERS: FilterState = {
   dateFrom: null,
   dateTo: null,
   propertyTypes: [],
+  outreachedBy: [],
   daysOnMarket: 'any',
   rettApplicable: 'all',
   q: '',

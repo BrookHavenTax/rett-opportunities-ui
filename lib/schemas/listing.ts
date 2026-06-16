@@ -1,6 +1,14 @@
 import { z } from 'zod';
-import { PROPERTY_TYPES, LISTING_STATUSES } from '@/types/listing';
+import {
+  PROPERTY_TYPES,
+  LISTING_STATUSES,
+  OUTREACH_OPTIONS,
+  OUTREACH_UNASSIGNED,
+} from '@/types/listing';
 import type { SortField } from '@/types/filters';
+
+/** Sentinel value used in the outreach filter to match unassigned listings. */
+export const UNASSIGNED = OUTREACH_UNASSIGNED;
 
 /* ────────────────────────────────────────────────────────────────────────
  * API query parsing — GET /api/listings and GET /api/export
@@ -34,6 +42,7 @@ export interface ParsedListingsQuery {
   minProfitPct?: number;
   maxProfitPct?: number;
   propertyType: string[];
+  outreachedBy: string[];
   rettApplicable?: boolean;
   daysOnMarket?: string;
   dateFrom?: Date;
@@ -92,6 +101,11 @@ export function parseListingsQuery(
     (PROPERTY_TYPES as string[]).includes(p),
   );
 
+  const outreachValid = [...OUTREACH_OPTIONS, UNASSIGNED] as string[];
+  const outreachedByRaw = splitCsv(searchParams.get('outreachedBy')).filter((o) =>
+    outreachValid.includes(o),
+  );
+
   const [rawField, rawDir] = (searchParams.get('sort') ?? 'importedAt:desc').split(':');
   const sortField: SortField = (SORT_FIELDS as string[]).includes(rawField ?? '')
     ? (rawField as SortField)
@@ -120,6 +134,7 @@ export function parseListingsQuery(
     minProfitPct: num(searchParams.get('minProfitPct')),
     maxProfitPct: num(searchParams.get('maxProfitPct')),
     propertyType: propertyTypeRaw,
+    outreachedBy: outreachedByRaw,
     rettApplicable: parseBool(searchParams.get('rettApplicable')),
     daysOnMarket: searchParams.get('daysOnMarket')?.trim() || undefined,
     dateFrom: parseDate(searchParams.get('dateFrom')),
@@ -214,3 +229,19 @@ export const soldRowSchema = z
   });
 
 export type SoldRow = z.infer<typeof soldRowSchema>;
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Mutations — staff edits to a listing
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** PATCH /api/listings/[id] — currently only the outreach assignment. */
+export const patchListingSchema = z.object({
+  outreachedBy: z
+    .enum(OUTREACH_OPTIONS as [string, ...string[]])
+    .nullable(),
+});
+
+/** POST/PATCH comment body. */
+export const commentBodySchema = z.object({
+  body: z.string().trim().min(1, 'Note cannot be empty').max(4000),
+});

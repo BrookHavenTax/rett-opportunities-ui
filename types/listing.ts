@@ -17,6 +17,27 @@ export const PROPERTY_TYPES: PropertyType[] = [
 
 export const LISTING_STATUSES: ListingStatus[] = ['new', 'active', 'sold'];
 
+/** Staff member who has taken outreach on a listing. */
+export type OutreachedBy = 'Greg' | 'Crystal' | 'Jacob' | 'Blake';
+
+export const OUTREACH_OPTIONS: OutreachedBy[] = [
+  'Greg',
+  'Crystal',
+  'Jacob',
+  'Blake',
+];
+
+/** Filter sentinel matching listings with no outreach owner. */
+export const OUTREACH_UNASSIGNED = 'Unassigned';
+
+/** A timestamped staff note attached to a listing. */
+export interface ListingComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A single RETT opportunity listing, serialized for the client. */
 export interface Listing {
   id: string;
@@ -33,6 +54,10 @@ export interface Listing {
   rettApplicable?: boolean | null;
   notes?: string | null;
   status: ListingStatus;
+  /** Staff member assigned to outreach (null = unassigned). */
+  outreachedBy?: OutreachedBy | null;
+  /** Staff notes thread (newest first). */
+  comments: ListingComment[];
   importedAt: string;
   importRunId?: string | null;
   soldDate?: string | null;

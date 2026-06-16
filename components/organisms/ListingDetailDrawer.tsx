@@ -4,6 +4,8 @@ import { Download, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusBadge } from '@/components/atoms/StatusBadge';
 import { ProfitCell } from '@/components/atoms/ProfitCell';
+import { OutreachSelect } from '@/components/molecules/OutreachSelect';
+import { NotesPanel } from '@/components/organisms/NotesPanel';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -21,12 +23,14 @@ import {
   formatDate,
   formatPercent,
 } from '@/lib/utils';
-import type { Listing } from '@/types/listing';
+import type { Listing, OutreachedBy } from '@/types/listing';
 
 export interface ListingDetailDrawerProps {
   listing: Listing | null;
   open: boolean;
   onClose: () => void;
+  onSetOutreach: (listing: Listing, value: OutreachedBy | null) => void;
+  onListingUpdate: (listing: Listing) => void;
 }
 
 function MetricTile({ label, children }: { label: string; children: React.ReactNode }) {
@@ -91,6 +95,8 @@ export function ListingDetailDrawer({
   listing,
   open,
   onClose,
+  onSetOutreach,
+  onListingUpdate,
 }: ListingDetailDrawerProps) {
   const handleCopyLink = async () => {
     if (!listing) return;
@@ -204,13 +210,23 @@ export function ListingDetailDrawer({
               )}
             </div>
 
-            {listing.notes && (
-              <div className="px-5 py-4">
-                <blockquote className="rounded-r-md border-l-2 border-brand-accent/40 bg-brand-light px-3 py-2 text-sm italic text-brand-text">
-                  {listing.notes}
-                </blockquote>
+            <div className="border-t border-brand-border px-5 py-4">
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-navy">
+                Outreached by
               </div>
-            )}
+              <OutreachSelect
+                value={listing.outreachedBy}
+                onChange={(v) => onSetOutreach(listing, v)}
+                className="w-full"
+              />
+            </div>
+
+            <div className="border-t border-brand-border px-5 py-4">
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-navy">
+                Notes
+              </div>
+              <NotesPanel listing={listing} onChange={onListingUpdate} />
+            </div>
 
             <SheetFooter className="mt-auto flex flex-row gap-2 border-t border-brand-border p-5">
               <Button

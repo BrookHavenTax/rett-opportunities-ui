@@ -84,6 +84,29 @@ doubles as the "applied filters" display. The table is full-width below it (no
 horizontal scroll on desktop). The old `FilterSidebar` / `FilterPanel` /
 `FilterChip` components were removed. `lib/filters.ts` still owns URL ⟷ state.
 
+## Staff-editable fields (listings are no longer import-only)
+
+Added 2026-06-16. Two per-listing fields are editable in the UI and survive the
+monthly import (import only inserts new / archives sold — it never overwrites an
+existing active listing's staff data):
+
+- **`outreachedBy`** — enum Greg/Crystal/Jacob/Blake or `null` (unassigned).
+  Inline `OutreachSelect` dropdown in the table's Outreached column + the drawer.
+  Also a **filter pill** (`outreachedBy` filter, supports the `Unassigned`
+  sentinel via `OUTREACH_UNASSIGNED`). Edited via `PATCH /api/listings/[id]`.
+- **`comments`** — a timestamped notes thread (Mongoose subdocs with their own
+  `_id` + timestamps). Viewed/added/edited/deleted in a modal (`NotesDialog` from
+  the table's Notes column) and in the drawer (`NotesPanel`, the shared inner UI).
+  CRUD via `POST /api/listings/[id]/comments` and
+  `PATCH|DELETE /api/listings/[id]/comments/[commentId]`. Each mutation returns
+  the full updated `Listing`; `ListingsView.updateListingLocal` syncs the table,
+  drawer, and modal from that.
+
+Note on the query builder: geo and outreach filters both use `$or`, so
+`lib/query.ts` composes OR-groups under a single `$and` (never two top-level
+`$or`s). The table column count is kept fit-to-width (no horizontal scroll) by
+showing street-only addresses and short headers; adding columns means trimming.
+
 ## Conventions
 
 - Server brain (lib + API routes) and the page orchestrator are hand-written for

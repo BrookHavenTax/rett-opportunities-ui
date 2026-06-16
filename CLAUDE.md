@@ -67,13 +67,22 @@ in-memory replica set and seeds on first boot.
   CSV export filename + rows, and the import pipeline (add/archive/skip-empty/
   error-rows/transaction). The import was validated end-to-end against the live API.
 
-## Navigation
+## Navigation & filtering UX
 
 There is **no persistent nav sidebar** (removed 2026-06-16 — it ate too much
 horizontal space). Pages are full-width and navigate via top-bar actions:
 Listings has an **Import Excel** button (→ /admin), and Admin has a **Back to
 Listings** button (→ /listings). `AppShell` is just a full-width wrapper now.
-The 240px **filter rail** on /listings is a separate thing and stays.
+
+**Filtering uses a top filter-pill bar, not a left rail** (redesigned 2026-06-16
+toward the Airtable/Linear pattern — fixes the horizontal-scroll/"wonky" feel).
+`components/organisms/FilterBar.tsx` renders one pill per filter dimension
+(Status, County, Price, Profit, Profit %, Date added, Type, Days on market,
+RETT). Each pill is a Popover; when a filter is set the pill fills accent-blue
+and shows `Label: value` with an × to clear, plus a global "Clear all". This
+doubles as the "applied filters" display. The table is full-width below it (no
+horizontal scroll on desktop). The old `FilterSidebar` / `FilterPanel` /
+`FilterChip` components were removed. `lib/filters.ts` still owns URL ⟷ state.
 
 ## Conventions
 

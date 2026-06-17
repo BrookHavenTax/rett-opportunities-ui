@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "Brookhaven RETT Opportunities Database — internal staff web app for browsing, filtering, and importing real estate transfer tax opportunity listings.",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

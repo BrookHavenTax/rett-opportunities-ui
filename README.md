@@ -7,6 +7,10 @@ Excel import pipeline.
 Built with **Next.js 14 (App Router)**, **TypeScript (strict)**, **Tailwind CSS**,
 **shadcn/ui**, **TanStack Table v8**, and **MongoDB / Mongoose**.
 
+> **Setting up on a new machine?** See **[SETUP.md](SETUP.md)** — a step-by-step
+> migration guide (it doubles as a prompt you can hand to Claude Code:
+> _"read SETUP.md and get the app running locally"_).
+
 ---
 
 ## Quick start

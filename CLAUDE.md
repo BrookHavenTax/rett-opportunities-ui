@@ -1,23 +1,39 @@
-# CLAUDE.md — RETT Opportunities Database
+# CLAUDE.md — Capital-Gains Outreach (BrookHaven)
 
-Project-specific instructions and state for this repo. See `.claude/handoff.md` for
-the live "current state" snapshot.
+Project-specific instructions and state. See `.claude/handoff.md` for the live
+"current state" snapshot. (Repo/route names are still `rett-*` / `/listings` /
+`Listing` internally — kept to limit churn — but the **domain is leads**.)
 
 ## What this is
 
-Internal Next.js 14 web app for Brookhaven staff to browse/filter/search RETT
-opportunity listings, with a monthly Excel import pipeline. Stack: Next.js 14 App
-Router, TypeScript strict, Tailwind, shadcn/ui, TanStack Table v8, MongoDB/Mongoose,
-zod, exceljs, papaparse.
+Internal Next.js 14 web app for BrookHaven Integrated Wealth Strategies staff to
+browse/filter/search **capital-gains outreach leads** (ranked property owners),
+updated by importing the monthly **Marketing Deliverable** Excel sheet. Stack:
+Next.js 14 App Router, TypeScript strict, Tailwind, shadcn/ui, TanStack Table v8,
+MongoDB/Mongoose, zod, exceljs, papaparse.
+
+## Domain pivot (2026-06-30)
+
+The app was migrated from the original "RETT real-estate listings" domain to the
+**Capital-Gains Outreach lead** domain when the real Excel arrived. The `Listing`
+model now holds lead fields: `grade` (S/A/B/C, the ranking + `gradeRank` for sort),
+`ownerName`/`llcName`, `address`/`city`/`state`/`zip`, `ownerPhone`/`ownerEmail`,
+`gain` (primary metric, can be negative), `estLoanBalance`, `agentName/Phone`,
+`originalSalePrice`, `saleDate`, `yearsSincePurchase`, `listedPrice`, `loanStatus`,
+`originalLoan`, `loanSource`, `lender`, `loanDate`, `refiAmount`,
+`recordedAmountPaid`, `estLtv` (0–1 ratio), `listingUrl` — plus the kept staff
+fields `outreachedBy` + `comments`. Removed: status/profit/county/propertyType/
+mlsNumber/daysOnMarket/RETT/listingDate/soldDate. Some doc sections below still use
+old terms; the model + UI are the source of truth.
 
 ## Phase status
 
-- **Phase 1 complete (built & verified):** full data model, API layer, import
-  pipeline, all pages (listings + drawer + permalink + admin), filtering/search/sort,
-  CSV export, 50-listing seed. Typecheck + lint + production build all green.
-  Verified in the running app (desktop + responsive) and via API/pipeline tests.
-- **Not yet done:** real MongoDB Atlas connection, staff-portal SSO/auth wiring,
-  production deploy, v2 candidates (map view, per-listing email alerts).
+- **Built & verified (current):** lead data model, API, single-sheet import
+  pipeline, all pages, grade-based stats, new filters (grade/state/gain-sort/listed
+  price/LTV/years/loan status/outreached), CSV export, synthetic seed. Typecheck +
+  lint + build green. The real Marketing Deliverable file was ingested live (326
+  added, 4 grade-blank rows flagged) and verified in the running app.
+- **Not yet done:** real MongoDB Atlas connection, staff-portal SSO/auth, deploy.
 
 ## How to run / test
 
@@ -38,16 +54,20 @@ in-memory replica set and seeds on first boot.
    `lib/filters.ts` owns `parseFilters` / `serializeFilters` / `filtersToApiQuery` /
    `deriveActiveChips`. `ListingsView` derives `filters` from `useSearchParams()` and
    updates via `router.push` — never store filter state independently of the URL.
-2. **Profit & profit% are computed in MongoDB** (`lib/query.ts` `$addFields`), so
-   they can be filtered/sorted server-side. Don't sort the table client-side
-   (TanStack is configured `manualSorting`).
-3. **`mlsNumber` is a unique *sparse* index.** Anything inserting a listing without an
-   MLS number must leave the field **unset** (not `""`). Seed + importPipeline comply.
-4. **Import is one transaction** (`lib/importPipeline.ts`): archive sold → insert new →
-   write `ImportRun`. Invalid rows are collected & skipped; empty rows are skipped
-   silently; unmatched sold rows become auditable errors; a `failed` run is still
-   recorded on fatal errors. A non-transactional fallback exists only for topologies
-   that genuinely lack transactions.
+2. **Sorting is server-side** (`lib/query.ts` `$sort`, TanStack `manualSorting`).
+   `gain` is a stored field (default sort `gain:desc`); grade sorts via the stored
+   `gradeRank` (S=0…C=3). `estLtv` is a 0–1 ratio (the LTV filter sends 0–100 and
+   the parser divides by 100).
+3. **Re-import is an upsert keyed by (`ownerName` + `address`).** Matched leads have
+   their imported fields refreshed; their staff fields (`outreachedBy`, `comments`)
+   are **never touched**. New leads are inserted. `addedCount` = upserts,
+   `updatedCount` = matches.
+4. **Import is one transaction** (`lib/importPipeline.ts`): single "Marketing
+   Deliverable" sheet; the header row is auto-detected (banner rows skipped);
+   each row is validated; valid rows are bulk-upserted; an `ImportRun` is written.
+   Invalid rows (e.g. blank Grade) are collected as auditable errors; blank rows are
+   skipped silently; a `failed` run is recorded on fatal errors. A non-transactional
+   fallback exists only for topologies that genuinely lack transactions.
 5. **In-memory dev DB is per-process.** The seed script and the dev server are
    separate processes, so seeding happens *inside* the app on first boot
    (`autoSeedIfEmpty` in `lib/mongodb.ts`), not only via `npm run seed`.

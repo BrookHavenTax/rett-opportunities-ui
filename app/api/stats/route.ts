@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/mongodb';
 import { ListingModel } from '@/lib/models/Listing';
-import type { Stats } from '@/types/listing';
+import type { Grade, Stats } from '@/types/listing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const TTL_MS = 5 * 60 * 1000;
-
-// Module-level cache (per server instance) — stats are summary counts that need
-// not be perfectly real-time, so a 5-minute cache is plenty.
 let cache: { at: number; data: Stats } | null = null;
 
 export async function GET() {
@@ -22,14 +19,18 @@ export async function GET() {
     }
 
     await dbConnect();
-    const [total, active, fresh, sold] = await Promise.all([
+    const [total, byGrade] = await Promise.all([
       ListingModel.estimatedDocumentCount(),
-      ListingModel.countDocuments({ status: 'active' }),
-      ListingModel.countDocuments({ status: 'new' }),
-      ListingModel.countDocuments({ status: 'sold' }),
+      ListingModel.aggregate<{ _id: Grade; n: number }>([
+        { $group: { _id: '$grade', n: { $sum: 1 } } },
+      ]),
     ]);
 
-    const data: Stats = { total, active, new: fresh, sold };
+    const counts: Record<Grade, number> = { S: 0, A: 0, B: 0, C: 0 };
+    for (const g of byGrade) {
+      if (g._id && g._id in counts) counts[g._id] = g.n;
+    }
+    const data: Stats = { total, ...counts };
     cache = { at: now, data };
 
     return NextResponse.json(data, {

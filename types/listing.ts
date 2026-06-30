@@ -1,36 +1,25 @@
 /**
- * Client-facing domain types. These describe the *serialized* shapes returned
- * by the API (ObjectIds become strings, Dates become ISO strings) so they are
- * safe to pass across the server/client boundary.
+ * Client-facing domain types — the *serialized* shapes returned by the API
+ * (ObjectIds become strings, Dates become ISO strings).
+ *
+ * The entity is a capital-gains outreach **lead** (a ranked property owner).
+ * It is kept internally under the name `Listing` to limit churn, but every
+ * user-facing label says "Lead".
  */
 
-export type ListingStatus = 'new' | 'active' | 'sold';
+export type Grade = 'S' | 'A' | 'B' | 'C';
 
-export type PropertyType = 'Residential' | 'Commercial' | 'Land' | 'Mixed';
+export const GRADE_OPTIONS: Grade[] = ['S', 'A', 'B', 'C'];
 
-export const PROPERTY_TYPES: PropertyType[] = [
-  'Residential',
-  'Commercial',
-  'Land',
-  'Mixed',
-];
-
-export const LISTING_STATUSES: ListingStatus[] = ['new', 'active', 'sold'];
-
-/** Staff member who has taken outreach on a listing. */
+/** Staff member who has taken outreach on a lead. */
 export type OutreachedBy = 'Greg' | 'Crystal' | 'Jacob' | 'Blake';
 
-export const OUTREACH_OPTIONS: OutreachedBy[] = [
-  'Greg',
-  'Crystal',
-  'Jacob',
-  'Blake',
-];
+export const OUTREACH_OPTIONS: OutreachedBy[] = ['Greg', 'Crystal', 'Jacob', 'Blake'];
 
-/** Filter sentinel matching listings with no outreach owner. */
+/** Filter sentinel matching leads with no outreach owner. */
 export const OUTREACH_UNASSIGNED = 'Unassigned';
 
-/** A timestamped staff note attached to a listing. */
+/** A timestamped staff note attached to a lead. */
 export interface ListingComment {
   id: string;
   body: string;
@@ -39,35 +28,49 @@ export interface ListingComment {
   updatedAt: string;
 }
 
-/** A single RETT opportunity listing, serialized for the client. */
+/** A single capital-gains outreach lead, serialized for the client. */
 export interface Listing {
   id: string;
+  grade: Grade;
+  ownerName: string;
+  llcName?: string | null;
   address: string;
-  streetAddress: string;
-  county: string;
+  city: string;
   state: string;
-  propertyType: PropertyType;
-  mlsNumber?: string | null;
-  purchasePrice: number;
-  listPrice: number;
-  listingDate?: string | null;
-  daysOnMarket?: number | null;
-  rettApplicable?: boolean | null;
-  notes?: string | null;
-  status: ListingStatus;
+  zip?: string | null;
+  ownerPhone?: string | null;
+  ownerEmail?: string | null;
+  gain: number;
+  estLoanBalance?: number | null;
+  agentName?: string | null;
+  agentPhone?: string | null;
+  originalSalePrice?: number | null;
+  saleDate?: string | null;
+  yearsSincePurchase?: number | null;
+  listedPrice?: number | null;
+  loanStatus?: string | null;
+  originalLoan?: number | null;
+  loanSource?: string | null;
+  lender?: string | null;
+  loanDate?: string | null;
+  refiAmount?: number | null;
+  recordedAmountPaid?: number | null;
+  /** Loan-to-value as a 0–1 ratio (e.g. 0.3658 = 36.58%). */
+  estLtv?: number | null;
+  listingUrl?: string | null;
+
   /** Staff member assigned to outreach (null = unassigned). */
   outreachedBy?: OutreachedBy | null;
-  /** Staff notes thread (newest first). */
+  /** Staff notes thread. */
   comments: ListingComment[];
+
   importedAt: string;
   importRunId?: string | null;
-  soldDate?: string | null;
-  soldImportRunId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
 
-/** Paginated listings response from GET /api/listings. */
+/** Paginated leads response from GET /api/listings. */
 export interface ListingsResponse {
   listings: Listing[];
   total: number;
@@ -75,18 +78,19 @@ export interface ListingsResponse {
   totalPages: number;
 }
 
-/** Summary counts from GET /api/stats. */
+/** Grade-distribution counts from GET /api/stats. */
 export interface Stats {
   total: number;
-  active: number;
-  new: number;
-  sold: number;
+  S: number;
+  A: number;
+  B: number;
+  C: number;
 }
 
-/** Distinct county/state combo for the CountyStateSelect. */
-export interface CountyOption {
-  county: string;
-  state: string;
+/** Distinct filter facets from GET /api/listings/facets. */
+export interface Facets {
+  states: string[];
+  loanStatuses: string[];
 }
 
 /* ── Import runs ── */
@@ -105,7 +109,8 @@ export interface ImportRun {
   filename: string;
   importedAt: string;
   addedCount: number;
-  archivedCount: number;
+  /** Existing leads refreshed (matched + updated), staff fields preserved. */
+  updatedCount: number;
   errorCount: number;
   errors: ImportError[];
   status: ImportRunStatus;
@@ -116,7 +121,7 @@ export interface ImportRun {
 /** Result returned by POST /api/import. */
 export interface ImportResult {
   addedCount: number;
-  archivedCount: number;
+  updatedCount: number;
   errorCount: number;
   errors: ImportError[];
   importRunId: string;

@@ -8,7 +8,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { NotesPanel } from '@/components/organisms/NotesPanel';
-import { formatCountyState } from '@/lib/utils';
 import type { Listing } from '@/types/listing';
 
 export interface NotesDialogProps {
@@ -32,8 +31,7 @@ export function NotesDialog({
             <DialogHeader>
               <DialogTitle>Notes</DialogTitle>
               <DialogDescription>
-                {listing.streetAddress} ·{' '}
-                {formatCountyState(listing.county, listing.state)}
+                {listing.ownerName} · {listing.city}, {listing.state}
               </DialogDescription>
             </DialogHeader>
             <NotesPanel listing={listing} onChange={onChange} />

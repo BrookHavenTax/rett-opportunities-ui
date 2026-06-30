@@ -1,8 +1,11 @@
-# RETT Opportunities Database
+# Capital-Gains Outreach (BrookHaven)
 
-Internal web app for Brookhaven staff to browse, filter, search, and import
-**Real Estate Transfer Tax (RETT)** opportunity listings. Updated monthly via an
-Excel import pipeline.
+Internal web app for BrookHaven Integrated Wealth Strategies staff to browse,
+filter, search, and import **capital-gains outreach leads** (ranked property
+owners). Updated by importing the monthly **Marketing Deliverable** Excel sheet.
+
+> Note: repo, route (`/listings`), and model (`Listing`) names are still `rett-*`
+> internally — kept to limit churn after the domain migrated; the data + UI are leads.
 
 Built with **Next.js 14 (App Router)**, **TypeScript (strict)**, **Tailwind CSS**,
 **shadcn/ui**, **TanStack Table v8**, and **MongoDB / Mongoose**.

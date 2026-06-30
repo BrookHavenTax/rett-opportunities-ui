@@ -1,5 +1,5 @@
-import { Archive, CircleDot, Database, Sparkles } from 'lucide-react';
-import type { ListingStatus, Stats } from '@/types/listing';
+import { Layers } from 'lucide-react';
+import type { Grade, Stats } from '@/types/listing';
 import { cn, formatNumber } from '@/lib/utils';
 import { StatCard } from '@/components/molecules/StatCard';
 
@@ -7,72 +7,60 @@ export interface StatsBarProps {
   stats: Stats | null;
   loading?: boolean;
   className?: string;
-  /** Current status filter — used to highlight the matching card. */
-  selectedStatus?: ListingStatus[];
-  /** Click a card to filter the table to that status set. */
-  onSelectStatus?: (statuses: ListingStatus[]) => void;
+  /** Current grade filter — used to highlight the matching card. */
+  selectedGrades?: Grade[];
+  /** Click a card to filter the table to that grade (or all). */
+  onSelectGrades?: (grades: Grade[]) => void;
 }
 
-const ALL_STATUSES: ListingStatus[] = ['new', 'active', 'sold'];
-
-function sameStatus(
-  a: ListingStatus[] | undefined,
-  b: ListingStatus[],
-): boolean {
+function sameGrades(a: Grade[] | undefined, b: Grade[]): boolean {
   if (!a || a.length !== b.length) return false;
   const set = new Set(a);
   return b.every((x) => set.has(x));
 }
 
+const GRADE_TONE: Record<Grade, 'gold' | 'green' | 'blue' | 'slate'> = {
+  S: 'gold',
+  A: 'green',
+  B: 'blue',
+  C: 'slate',
+};
+
+const GRADES: Grade[] = ['S', 'A', 'B', 'C'];
+
 export function StatsBar({
   stats,
   loading,
   className,
-  selectedStatus,
-  onSelectStatus,
+  selectedGrades,
+  onSelectGrades,
 }: StatsBarProps) {
   const isLoading = loading || stats === null;
-  const click = (statuses: ListingStatus[]) =>
-    onSelectStatus ? () => onSelectStatus(statuses) : undefined;
+  const click = (grades: Grade[]) =>
+    onSelectGrades ? () => onSelectGrades(grades) : undefined;
 
   return (
-    <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-4', className)}>
+    <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-5', className)}>
       <StatCard
-        label="Total Listings"
+        label="Total Leads"
         value={stats ? formatNumber(stats.total) : 0}
-        icon={Database}
+        icon={Layers}
         tone="blue"
         loading={isLoading}
-        onClick={click(ALL_STATUSES)}
-        active={sameStatus(selectedStatus, ALL_STATUSES)}
+        onClick={click([])}
+        active={!selectedGrades || selectedGrades.length === 0}
       />
-      <StatCard
-        label="Active"
-        value={stats ? formatNumber(stats.active) : 0}
-        icon={CircleDot}
-        tone="green"
-        loading={isLoading}
-        onClick={click(['active'])}
-        active={sameStatus(selectedStatus, ['active'])}
-      />
-      <StatCard
-        label="New This Month"
-        value={stats ? formatNumber(stats.new) : 0}
-        icon={Sparkles}
-        tone="gold"
-        loading={isLoading}
-        onClick={click(['new'])}
-        active={sameStatus(selectedStatus, ['new'])}
-      />
-      <StatCard
-        label="Sold / Archived"
-        value={stats ? formatNumber(stats.sold) : 0}
-        icon={Archive}
-        tone="red"
-        loading={isLoading}
-        onClick={click(['sold'])}
-        active={sameStatus(selectedStatus, ['sold'])}
-      />
+      {GRADES.map((g) => (
+        <StatCard
+          key={g}
+          label={`Grade ${g}`}
+          value={stats ? formatNumber(stats[g]) : 0}
+          tone={GRADE_TONE[g]}
+          loading={isLoading}
+          onClick={click([g])}
+          active={sameGrades(selectedGrades, [g])}
+        />
+      ))}
     </div>
   );
 }

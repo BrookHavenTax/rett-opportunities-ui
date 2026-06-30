@@ -1,30 +1,17 @@
-import type { ListingStatus, PropertyType } from './listing';
-
-/* ── Filter option unions ── */
-
-export type DaysOnMarketBucket =
-  | 'any'
-  | 'lt30'
-  | '30to90'
-  | '90to180'
-  | '180plus';
-
-export type RettFilter = 'all' | 'yes' | 'no';
+import type { Grade } from './listing';
 
 export type SortDirection = 'asc' | 'desc';
 
 export type SortField =
-  | 'status'
-  | 'address'
-  | 'county'
-  | 'propertyType'
-  | 'purchasePrice'
-  | 'listPrice'
-  | 'profit'
-  | 'profitPct'
-  | 'listingDate'
-  | 'importedAt'
-  | 'daysOnMarket';
+  | 'grade'
+  | 'ownerName'
+  | 'city'
+  | 'gain'
+  | 'listedPrice'
+  | 'estLtv'
+  | 'yearsSincePurchase'
+  | 'originalSalePrice'
+  | 'saleDate';
 
 export interface SortState {
   field: SortField;
@@ -32,28 +19,23 @@ export interface SortState {
 }
 
 /**
- * The complete, canonical filter state for the listings view. This is the
- * single source of truth that is (a) serialized to/from the URL query string,
- * (b) rendered by the FilterSidebar, and (c) translated into an API query.
- *
- * `counties` entries are encoded as `"County|ST"` so a county name is never
- * ambiguous across states.
+ * Canonical filter state for the leads view — the single source of truth that
+ * is serialized to/from the URL, rendered by the FilterBar, and translated into
+ * an API query.
  */
 export interface FilterState {
-  status: ListingStatus[];
-  counties: string[];
-  priceMin: number;
-  priceMax: number;
-  profitPctMin: number | null;
-  profitPctMax: number | null;
-  /** Inclusive month bounds, "YYYY-MM". */
-  dateFrom: string | null;
-  dateTo: string | null;
-  propertyTypes: PropertyType[];
-  /** Outreach owners to filter by; may include the "Unassigned" sentinel. */
+  grades: Grade[];
+  states: string[];
+  listedPriceMin: number;
+  listedPriceMax: number;
+  /** Loan-to-value bounds as whole percentages (0–100). */
+  ltvMin: number;
+  ltvMax: number;
+  yearsMin: number;
+  yearsMax: number;
+  loanStatuses: string[];
+  /** Outreach owners; may include the "Unassigned" sentinel. */
   outreachedBy: string[];
-  daysOnMarket: DaysOnMarketBucket;
-  rettApplicable: RettFilter;
   q: string;
   sort: SortState;
   page: number;
@@ -62,51 +44,35 @@ export interface FilterState {
 
 /* ── Constants ── */
 
-export const PRICE_MIN = 0;
-export const PRICE_MAX = 5_000_000;
-export const PRICE_STEP = 50_000;
+export const LISTED_PRICE_MIN = 0;
+export const LISTED_PRICE_MAX = 20_000_000;
+export const LISTED_PRICE_STEP = 250_000;
+
+export const LTV_MIN = 0;
+export const LTV_MAX = 100;
+export const LTV_STEP = 5;
+
+export const YEARS_MIN = 0;
+export const YEARS_MAX = 41;
+export const YEARS_STEP = 1;
 
 export const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export const DEFAULT_PAGE_SIZE = 50;
 
-export const DAYS_ON_MARKET_OPTIONS: {
-  value: DaysOnMarketBucket;
-  label: string;
-}[] = [
-  { value: 'any', label: 'Any' },
-  { value: 'lt30', label: 'Under 30 days' },
-  { value: '30to90', label: '30 – 90 days' },
-  { value: '90to180', label: '90 – 180 days' },
-  { value: '180plus', label: '180+ days' },
-];
-
-/** The default view: Active listings, newest-imported first. */
+/** The default view: all leads, highest gain first (the sheet is ranked by gain). */
 export const DEFAULT_FILTERS: FilterState = {
-  status: ['active'],
-  counties: [],
-  priceMin: PRICE_MIN,
-  priceMax: PRICE_MAX,
-  profitPctMin: null,
-  profitPctMax: null,
-  dateFrom: null,
-  dateTo: null,
-  propertyTypes: [],
+  grades: [],
+  states: [],
+  listedPriceMin: LISTED_PRICE_MIN,
+  listedPriceMax: LISTED_PRICE_MAX,
+  ltvMin: LTV_MIN,
+  ltvMax: LTV_MAX,
+  yearsMin: YEARS_MIN,
+  yearsMax: YEARS_MAX,
+  loanStatuses: [],
   outreachedBy: [],
-  daysOnMarket: 'any',
-  rettApplicable: 'all',
   q: '',
-  sort: { field: 'importedAt', dir: 'desc' },
+  sort: { field: 'gain', dir: 'desc' },
   page: 1,
   limit: DEFAULT_PAGE_SIZE,
 };
-
-/** Encode/decode the `"County|ST"` county-key format used in `counties`. */
-export function countyKey(county: string, state: string): string {
-  return `${county}|${state}`;
-}
-
-export function parseCountyKey(key: string): { county: string; state: string } {
-  const idx = key.lastIndexOf('|');
-  if (idx === -1) return { county: key, state: '' };
-  return { county: key.slice(0, idx), state: key.slice(idx + 1) };
-}

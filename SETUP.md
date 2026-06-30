@@ -1,4 +1,4 @@
-# Setup & Migration Guide — RETT Opportunities Database
+# Setup & Migration Guide — Capital-Gains Outreach (BrookHaven)
 
 Everything you need to run this app on a **fresh machine** after `git clone`.
 
@@ -18,7 +18,7 @@ npm run dev          # → http://localhost:3000
 ```
 
 That's it. **No database to install** — on first load the app spins up an
-in-memory MongoDB and seeds 50 sample listings automatically.
+in-memory MongoDB and seeds 16 sample leads automatically.
 
 ---
 
@@ -39,7 +39,7 @@ No MongoDB, Docker, or any other service needs to be installed for local dev.
 
 1. **No database setup.** Local dev needs **no MongoDB**. When `MONGODB_URI` is
    unset (or `=memory`), the app boots an in-memory MongoDB **replica set** and
-   **seeds 50 sample listings** (30 active / 12 new / 8 sold) on the first request.
+   **seeds 16 sample leads** (grades S/A/B/C) on the first request.
 
 2. **The in-memory DB is ephemeral.** It **resets every time you restart** the
    dev server and re-seeds on the next boot. That's expected locally. For
@@ -82,7 +82,7 @@ npm run dev                  # http://localhost:3000
 npm run dev -- -p 3100       # http://localhost:3100
 ```
 
-Open **http://localhost:3000/listings** — you should see 50 listings, filters,
+Open **http://localhost:3000/listings** — you should see sample leads, filters,
 stat cards, and the table. The import tool is at **/admin**.
 
 ---
@@ -127,7 +127,7 @@ See **`.claude/handoff.md`** (current state + remaining work) and **`CLAUDE.md`*
 | Offline and first run fails | The Mongo binary needs internet **once**. After it's cached, offline works. |
 | `tsc`/typecheck complains about `next-env.d.ts` | Run `npm run dev` or `npm run build` once first — it generates that file. |
 | Data "disappeared" after restart | Expected: the in-memory DB resets on restart. Use a real `MONGODB_URI` to persist. |
-| Want a clean re-seed | `npm run seed` (wipes + reinserts the 50 sample listings). |
+| Want a clean re-seed | `npm run seed` (wipes + reinserts the 16 sample leads). |
 
 ---
 
@@ -143,8 +143,8 @@ If you've been asked to set up and start this project locally, do exactly this:
 4. **Verify it's actually healthy** (don't trust the "Ready" line alone — the
    first HTTP request is what triggers the DB boot + seed):
    - `curl -s http://localhost:3100/api/stats` → expect
-     `{"total":50,"active":30,"new":12,"sold":8}`
-   - `curl -s "http://localhost:3100/api/listings?status=active&limit=1"` → a listing
+     `{"total":16,"S":1,"A":3,"B":5,"C":7}`
+   - `curl -s "http://localhost:3100/api/listings?limit=1"` → a lead
 5. **Report** the app is live at `http://localhost:3100/listings` (admin import at `/admin`).
 
 Important notes for the agent:

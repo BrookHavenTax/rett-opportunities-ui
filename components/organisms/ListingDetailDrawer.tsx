@@ -1,28 +1,14 @@
 'use client';
 
-import { Download, Link2 } from 'lucide-react';
+import { Download, ExternalLink, Link2, Mail, Phone } from 'lucide-react';
 import { toast } from 'sonner';
-import { StatusBadge } from '@/components/atoms/StatusBadge';
-import { ProfitCell } from '@/components/atoms/ProfitCell';
+import { GradeBadge } from '@/components/atoms/GradeBadge';
+import { GainCell } from '@/components/atoms/GainCell';
 import { OutreachSelect } from '@/components/molecules/OutreachSelect';
 import { NotesPanel } from '@/components/organisms/NotesPanel';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-} from '@/components/ui/sheet';
-import {
-  calcProfit,
-  calcProfitPct,
-  cn,
-  formatCountyState,
-  formatCurrency,
-  formatDate,
-  formatPercent,
-} from '@/lib/utils';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import type { Listing, OutreachedBy } from '@/types/listing';
 
 export interface ListingDetailDrawerProps {
@@ -33,213 +19,174 @@ export interface ListingDetailDrawerProps {
   onListingUpdate: (listing: Listing) => void;
 }
 
-function MetricTile({ label, children }: { label: string; children: React.ReactNode }) {
+function pct(v: number | null | undefined): string {
+  return v === null || v === undefined ? '—' : `${(v * 100).toFixed(1)}%`;
+}
+function money(v: number | null | undefined): string {
+  return v === null || v === undefined ? '—' : formatCurrency(v);
+}
+
+function Metric({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-brand-border bg-white p-3">
-      <div className="text-[11px] uppercase tracking-wide text-brand-muted">
-        {label}
-      </div>
-      <div className="mt-1 text-base font-semibold tabular-nums text-brand-navy">
-        {children}
-      </div>
+      <div className="text-[11px] uppercase tracking-wide text-brand-muted">{label}</div>
+      <div className="mt-1 text-base font-semibold tabular-nums text-brand-navy">{children}</div>
     </div>
   );
 }
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wide text-brand-muted">
-        {label}
-      </div>
-      <div className="mt-0.5 text-brand-text">{value}</div>
+      <div className="text-[11px] uppercase tracking-wide text-brand-muted">{label}</div>
+      <div className="mt-0.5 break-words text-brand-text">{value}</div>
     </div>
   );
 }
 
-function buildListingCsv(listing: Listing): string {
-  const profit = calcProfit(listing.purchasePrice, listing.listPrice);
-  const profitPct = calcProfitPct(listing.purchasePrice, listing.listPrice);
-
+function buildCsv(l: Listing): string {
   const fields: ReadonlyArray<readonly [string, string | number]> = [
-    ['ID', listing.id],
-    ['Street Address', listing.streetAddress],
-    ['County', listing.county],
-    ['State', listing.state],
-    ['Property Type', listing.propertyType],
-    ['MLS #', listing.mlsNumber ?? ''],
-    ['Status', listing.status],
-    ['Purchase Price', listing.purchasePrice],
-    ['List Price', listing.listPrice],
-    ['Est. Profit', profit],
-    ['Profit %', profitPct.toFixed(1)],
-    ['Days on Market', listing.daysOnMarket ?? ''],
-    ['RETT Applicable', listing.rettApplicable ? 'Yes' : 'No'],
-    ['Listing Date', listing.listingDate ?? ''],
-    ['Date Added', listing.importedAt],
-    ['Sold Date', listing.soldDate ?? ''],
-    ['Notes', listing.notes ?? ''],
+    ['Grade', l.grade],
+    ['Owner Name', l.ownerName],
+    ['LLC Name', l.llcName ?? ''],
+    ['Address', l.address],
+    ['City', l.city],
+    ['State', l.state],
+    ['ZIP', l.zip ?? ''],
+    ['Owner Phone', l.ownerPhone ?? ''],
+    ['Owner Email', l.ownerEmail ?? ''],
+    ['Gain', l.gain],
+    ['Est. Loan Balance', l.estLoanBalance ?? ''],
+    ['Original Sale Price', l.originalSalePrice ?? ''],
+    ['Sale Date', l.saleDate ? l.saleDate.slice(0, 10) : ''],
+    ['Years Since Purchase', l.yearsSincePurchase ?? ''],
+    ['Listed Price', l.listedPrice ?? ''],
+    ['Loan Status', l.loanStatus ?? ''],
+    ['Est. LTV', l.estLtv ?? ''],
+    ['Listing URL', l.listingUrl ?? ''],
+    ['Outreached By', l.outreachedBy ?? ''],
   ];
-
-  const escape = (value: string | number): string => {
-    const str = String(value);
-    return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  const esc = (v: string | number) => {
+    const s = String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-
-  const header = fields.map(([key]) => escape(key)).join(',');
-  const row = fields.map(([, value]) => escape(value)).join(',');
-  return `${header}\r\n${row}\r\n`;
+  return `${fields.map(([k]) => esc(k)).join(',')}\r\n${fields.map(([, v]) => esc(v)).join(',')}\r\n`;
 }
 
-export function ListingDetailDrawer({
-  listing,
-  open,
-  onClose,
-  onSetOutreach,
-  onListingUpdate,
-}: ListingDetailDrawerProps) {
+export function ListingDetailDrawer({ listing, open, onClose, onSetOutreach, onListingUpdate }: ListingDetailDrawerProps) {
   const handleCopyLink = async () => {
     if (!listing) return;
     const base = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
-    const url = `${base}/listings/${listing.id}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(`${base}/listings/${listing.id}`);
       toast.success('Link copied');
     } catch {
       toast.error('Could not copy link');
     }
   };
-
   const handleExport = () => {
     if (!listing) return;
-    const csv = buildListingCsv(listing);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = `rett-listing-${listing.id}.csv`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(objectUrl);
-    toast.success('Listing exported');
+    const blob = new Blob([buildCsv(listing)], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lead-${listing.id}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Lead exported');
   };
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
-    >
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-[480px] flex flex-col gap-0 p-0 overflow-y-auto scrollbar-thin"
-      >
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 scrollbar-thin sm:max-w-[480px]">
         {listing && (
           <>
             <SheetHeader className="space-y-2 border-b border-brand-border p-5 pr-12">
-              <StatusBadge status={listing.status} />
-              <SheetTitle className="text-lg font-bold text-brand-navy">
-                {listing.streetAddress}
-              </SheetTitle>
+              <div className="flex items-center gap-2">
+                <GradeBadge grade={listing.grade} />
+                <span className="text-xs font-semibold uppercase tracking-wide text-brand-muted">
+                  Grade {listing.grade}
+                </span>
+              </div>
+              <SheetTitle className="text-lg font-bold text-brand-navy">{listing.ownerName}</SheetTitle>
+              {listing.llcName && <p className="text-sm text-brand-muted">{listing.llcName}</p>}
               <p className="text-sm text-brand-muted">
-                {formatCountyState(listing.county, listing.state)}
+                {listing.address}, {listing.city}, {listing.state} {listing.zip ?? ''}
               </p>
             </SheetHeader>
 
             <div className="grid grid-cols-2 gap-3 p-5">
-              <MetricTile label="Purchase Price">
-                {formatCurrency(listing.purchasePrice)}
-              </MetricTile>
-              <MetricTile label="List Price">
-                {formatCurrency(listing.listPrice)}
-              </MetricTile>
-              <MetricTile label="Est. Profit">
-                <ProfitCell
-                  purchasePrice={listing.purchasePrice}
-                  listPrice={listing.listPrice}
-                />
-              </MetricTile>
-              <MetricTile label="Profit %">
-                <span
-                  className={cn(
-                    'tabular-nums',
-                    calcProfit(listing.purchasePrice, listing.listPrice) > 0
-                      ? 'text-status-active'
-                      : calcProfit(listing.purchasePrice, listing.listPrice) < 0
-                        ? 'text-status-sold'
-                        : 'text-brand-muted',
-                  )}
-                >
-                  {formatPercent(
-                    calcProfitPct(listing.purchasePrice, listing.listPrice),
-                  )}
-                </span>
-              </MetricTile>
+              <Metric label="Gain"><GainCell value={listing.gain} compact={false} /></Metric>
+              <Metric label="Listed Price">{money(listing.listedPrice)}</Metric>
+              <Metric label="Est. LTV">{pct(listing.estLtv)}</Metric>
+              <Metric label="Years Held">{listing.yearsSincePurchase ?? '—'}</Metric>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 pb-2 text-sm">
-              <DetailRow
-                label="County / State"
-                value={formatCountyState(listing.county, listing.state)}
-              />
-              <DetailRow label="Property Type" value={listing.propertyType} />
-              <DetailRow label="MLS #" value={listing.mlsNumber ?? '—'} />
-              <DetailRow
-                label="Days on Market"
-                value={listing.daysOnMarket ?? '—'}
-              />
-              <DetailRow
-                label="RETT Applicable"
-                value={listing.rettApplicable ? 'Yes' : 'No'}
-              />
-              <DetailRow
-                label="Listing Date"
-                value={formatDate(listing.listingDate)}
-              />
-              <DetailRow
-                label="Date Added"
-                value={formatDate(listing.importedAt)}
-              />
-              {listing.status === 'sold' && (
-                <DetailRow
-                  label="Sold Date"
-                  value={formatDate(listing.soldDate)}
-                />
-              )}
+            {/* Contact */}
+            <div className="border-t border-brand-border px-5 py-4">
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-navy">Owner contact</div>
+              <div className="flex flex-col gap-2 text-sm">
+                {listing.ownerPhone ? (
+                  <a href={`tel:${listing.ownerPhone}`} className="inline-flex items-center gap-2 text-brand-accent hover:underline">
+                    <Phone className="h-4 w-4" /> {listing.ownerPhone}
+                  </a>
+                ) : (
+                  <span className="text-brand-muted">No phone</span>
+                )}
+                {listing.ownerEmail ? (
+                  <a href={`mailto:${listing.ownerEmail}`} className="inline-flex items-center gap-2 break-all text-brand-accent hover:underline">
+                    <Mail className="h-4 w-4 shrink-0" /> {listing.ownerEmail}
+                  </a>
+                ) : (
+                  <span className="text-brand-muted">No email</span>
+                )}
+                {(listing.agentName || listing.agentPhone) && (
+                  <span className="text-brand-muted">
+                    Agent: {listing.agentName ?? '—'} {listing.agentPhone ? `· ${listing.agentPhone}` : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Financials */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-brand-border px-5 py-4 text-sm">
+              <Row label="Original Sale Price" value={money(listing.originalSalePrice)} />
+              <Row label="Sale Date" value={formatDate(listing.saleDate)} />
+              <Row label="Est. Loan Balance" value={money(listing.estLoanBalance)} />
+              <Row label="Original Loan" value={money(listing.originalLoan)} />
+              <Row label="Loan Status" value={listing.loanStatus ?? '—'} />
+              <Row label="Loan Source" value={listing.loanSource ?? '—'} />
+              <Row label="Lender" value={listing.lender ?? '—'} />
+              <Row label="Loan Date" value={formatDate(listing.loanDate)} />
+              <Row label="Refi Amount" value={money(listing.refiAmount)} />
+              <Row label="Recorded Amount Paid" value={money(listing.recordedAmountPaid)} />
+            </div>
+
+            {listing.listingUrl && (
+              <div className="px-5 pb-4">
+                <a href={listing.listingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-accent hover:underline">
+                  <ExternalLink className="h-4 w-4" /> View listing
+                </a>
+              </div>
+            )}
+
+            <div className="border-t border-brand-border px-5 py-4">
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-navy">Outreached by</div>
+              <OutreachSelect value={listing.outreachedBy} onChange={(v) => onSetOutreach(listing, v)} className="w-full" />
             </div>
 
             <div className="border-t border-brand-border px-5 py-4">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-navy">
-                Outreached by
-              </div>
-              <OutreachSelect
-                value={listing.outreachedBy}
-                onChange={(v) => onSetOutreach(listing, v)}
-                className="w-full"
-              />
-            </div>
-
-            <div className="border-t border-brand-border px-5 py-4">
-              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-navy">
-                Notes
-              </div>
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-navy">Notes</div>
               <NotesPanel listing={listing} onChange={onListingUpdate} />
             </div>
 
             <SheetFooter className="mt-auto flex flex-row gap-2 border-t border-brand-border p-5">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={handleCopyLink}
-              >
-                <Link2 />
-                Copy Link
+              <Button variant="outline" className="flex-1" onClick={handleCopyLink}>
+                <Link2 /> Copy Link
               </Button>
               <Button className="flex-1" onClick={handleExport}>
-                <Download />
-                Export Listing
+                <Download /> Export Lead
               </Button>
             </SheetFooter>
           </>

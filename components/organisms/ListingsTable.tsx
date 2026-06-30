@@ -9,8 +9,8 @@ import {
 } from '@tanstack/react-table';
 import { MessageSquare } from 'lucide-react';
 
-import { StatusBadge } from '@/components/atoms/StatusBadge';
-import { ProfitCell } from '@/components/atoms/ProfitCell';
+import { GradeBadge } from '@/components/atoms/GradeBadge';
+import { GainCell } from '@/components/atoms/GainCell';
 import { SortIcon } from '@/components/atoms/SortIcon';
 import { OutreachSelect } from '@/components/molecules/OutreachSelect';
 import {
@@ -21,14 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  calcProfitPct,
-  cn,
-  formatCountyState,
-  formatCurrency,
-  formatMonthYear,
-  formatPercent,
-} from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import type { Listing, OutreachedBy } from '@/types/listing';
 import type { SortField, SortState } from '@/types/filters';
 
@@ -44,26 +37,22 @@ export interface ListingsTableProps {
 }
 
 type Align = 'left' | 'right' | 'center';
-
 interface ColumnMeta {
-  /** SortField this column sorts by; omitted = not sortable (interactive col). */
   sortField?: SortField;
   align: Align;
 }
 
 const columnHelper = createColumnHelper<Listing>();
-
 const ALIGN_CLASS: Record<Align, string> = {
   left: 'text-left justify-start',
   right: 'text-right justify-end',
   center: 'text-center justify-center',
 };
 
-/**
- * Server-side sorted listings table. TanStack is used only for column/markup
- * structure and `flexRender`. The Outreached + Notes columns are interactive —
- * their cells stop click propagation so they don't open the row drawer.
- */
+function pct(v: number | null | undefined): string {
+  return v === null || v === undefined ? '—' : `${(v * 100).toFixed(1)}%`;
+}
+
 export function ListingsTable({
   listings,
   sort,
@@ -76,99 +65,69 @@ export function ListingsTable({
 }: ListingsTableProps) {
   const columns = useMemo(
     () => [
-      columnHelper.accessor('status', {
-        id: 'status',
-        header: 'Status',
-        cell: (ctx) => <StatusBadge status={ctx.getValue()} />,
-        meta: { sortField: 'status', align: 'center' } satisfies ColumnMeta,
+      columnHelper.accessor('grade', {
+        id: 'grade',
+        header: 'Grade',
+        cell: (ctx) => <GradeBadge grade={ctx.getValue()} />,
+        meta: { sortField: 'grade', align: 'center' } satisfies ColumnMeta,
+      }),
+      columnHelper.accessor('ownerName', {
+        id: 'ownerName',
+        header: 'Owner',
+        cell: (ctx) => (
+          <div className="min-w-0">
+            <div className="max-w-[14rem] truncate font-medium text-brand-accent">
+              {ctx.getValue()}
+            </div>
+            {ctx.row.original.llcName && (
+              <div className="max-w-[14rem] truncate text-xs text-brand-muted">
+                {ctx.row.original.llcName}
+              </div>
+            )}
+          </div>
+        ),
+        meta: { sortField: 'ownerName', align: 'left' } satisfies ColumnMeta,
       }),
       columnHelper.accessor('address', {
         id: 'address',
         header: 'Address',
-        // Show only the street — the County/State column carries the rest.
         cell: (ctx) => (
-          <span className="block max-w-[15rem] truncate font-medium text-brand-accent">
-            {ctx.row.original.streetAddress}
-          </span>
+          <span className="block max-w-[12rem] truncate">{ctx.getValue()}</span>
         ),
-        meta: { sortField: 'address', align: 'left' } satisfies ColumnMeta,
+        meta: { align: 'left' } satisfies ColumnMeta,
       }),
-      columnHelper.display({
-        id: 'county',
-        header: 'County, State',
-        cell: (ctx) =>
-          formatCountyState(ctx.row.original.county, ctx.row.original.state),
-        meta: { sortField: 'county', align: 'left' } satisfies ColumnMeta,
+      columnHelper.accessor('city', {
+        id: 'city',
+        header: 'City, ST',
+        cell: (ctx) => `${ctx.getValue()}, ${ctx.row.original.state}`,
+        meta: { sortField: 'city', align: 'left' } satisfies ColumnMeta,
       }),
-      columnHelper.accessor('propertyType', {
-        id: 'propertyType',
-        header: 'Type',
-        cell: (ctx) => ctx.getValue(),
-        meta: { sortField: 'propertyType', align: 'left' } satisfies ColumnMeta,
+      columnHelper.accessor('gain', {
+        id: 'gain',
+        header: 'Gain',
+        cell: (ctx) => <GainCell value={ctx.getValue()} />,
+        meta: { sortField: 'gain', align: 'right' } satisfies ColumnMeta,
       }),
-      columnHelper.accessor('purchasePrice', {
-        id: 'purchasePrice',
-        header: 'Purchase',
-        cell: (ctx) => (
-          <span className="tabular-nums">{formatCurrency(ctx.getValue())}</span>
-        ),
-        meta: { sortField: 'purchasePrice', align: 'right' } satisfies ColumnMeta,
-      }),
-      columnHelper.accessor('listPrice', {
-        id: 'listPrice',
-        header: 'List',
-        cell: (ctx) => (
-          <span className="tabular-nums">{formatCurrency(ctx.getValue())}</span>
-        ),
-        meta: { sortField: 'listPrice', align: 'right' } satisfies ColumnMeta,
-      }),
-      columnHelper.display({
-        id: 'profit',
-        header: 'Est. Profit',
-        cell: (ctx) => (
-          <ProfitCell
-            purchasePrice={ctx.row.original.purchasePrice}
-            listPrice={ctx.row.original.listPrice}
-          />
-        ),
-        meta: { sortField: 'profit', align: 'right' } satisfies ColumnMeta,
-      }),
-      columnHelper.display({
-        id: 'profitPct',
-        header: 'Profit %',
+      columnHelper.accessor('listedPrice', {
+        id: 'listedPrice',
+        header: 'Listed',
         cell: (ctx) => {
-          const { purchasePrice, listPrice } = ctx.row.original;
-          const pct = calcProfitPct(purchasePrice, listPrice);
-          const colorClass =
-            pct > 0
-              ? 'text-status-active'
-              : pct < 0
-                ? 'text-status-sold'
-                : 'text-brand-muted';
-          return (
-            <span
-              className={cn(
-                'font-semibold tabular-nums whitespace-nowrap',
-                colorClass,
-              )}
-            >
-              {formatPercent(pct)}
-            </span>
-          );
+          const v = ctx.getValue();
+          return <span className="tabular-nums">{v == null ? '—' : formatCurrency(v)}</span>;
         },
-        meta: { sortField: 'profitPct', align: 'right' } satisfies ColumnMeta,
+        meta: { sortField: 'listedPrice', align: 'right' } satisfies ColumnMeta,
       }),
-      columnHelper.accessor('importedAt', {
-        id: 'importedAt',
-        header: 'Added',
-        cell: (ctx) => formatMonthYear(ctx.getValue()),
-        meta: { sortField: 'importedAt', align: 'left' } satisfies ColumnMeta,
+      columnHelper.accessor('estLtv', {
+        id: 'estLtv',
+        header: 'Est. LTV',
+        cell: (ctx) => <span className="tabular-nums">{pct(ctx.getValue())}</span>,
+        meta: { sortField: 'estLtv', align: 'right' } satisfies ColumnMeta,
       }),
-      columnHelper.accessor('daysOnMarket', {
-        id: 'daysOnMarket',
-        header: 'DOM',
+      columnHelper.accessor('yearsSincePurchase', {
+        id: 'yearsSincePurchase',
+        header: 'Years',
         cell: (ctx) => <span className="tabular-nums">{ctx.getValue() ?? '—'}</span>,
-        meta: { sortField: 'daysOnMarket', align: 'right' } satisfies ColumnMeta,
+        meta: { sortField: 'yearsSincePurchase', align: 'right' } satisfies ColumnMeta,
       }),
       columnHelper.display({
         id: 'outreached',
@@ -223,59 +182,39 @@ export function ListingsTable({
     if (sort.field === field) {
       onSortChange({ field, dir: sort.dir === 'asc' ? 'desc' : 'asc' });
     } else {
-      onSortChange({ field, dir: 'desc' });
+      onSortChange({ field, dir: field === 'grade' || field === 'ownerName' || field === 'city' ? 'asc' : 'desc' });
     }
   };
 
   return (
-    <div
-      className={cn(
-        'overflow-x-auto rounded-xl border border-brand-border bg-white scrollbar-thin',
-        className,
-      )}
-    >
+    <div className={cn('overflow-x-auto rounded-xl border border-brand-border bg-white scrollbar-thin', className)}>
       <Table>
         <TableHeader className="sticky top-0 z-10 bg-brand-light">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className="hover:bg-transparent">
-              {headerGroup.headers.map((header) => {
+          {table.getHeaderGroups().map((hg) => (
+            <TableRow key={hg.id} className="hover:bg-transparent">
+              {hg.headers.map((header) => {
                 const meta = header.column.columnDef.meta as ColumnMeta;
                 const { sortField, align } = meta;
                 const content = header.isPlaceholder
                   ? null
-                  : flexRender(
-                      header.column.columnDef.header,
-                      header.getContext(),
-                    );
+                  : flexRender(header.column.columnDef.header, header.getContext());
                 return (
-                  <TableHead
-                    key={header.id}
-                    className={cn('bg-brand-light', ALIGN_CLASS[align])}
-                  >
+                  <TableHead key={header.id} className={cn('bg-brand-light', ALIGN_CLASS[align])}>
                     {sortField ? (
                       <button
                         type="button"
                         onClick={() => handleSort(sortField)}
                         className={cn(
                           'inline-flex w-full items-center gap-1 whitespace-nowrap uppercase tracking-wide transition-colors hover:text-brand-navy',
-                          sort.field === sortField
-                            ? 'text-brand-navy'
-                            : 'text-brand-muted',
+                          sort.field === sortField ? 'text-brand-navy' : 'text-brand-muted',
                           ALIGN_CLASS[align],
                         )}
                       >
                         {content}
-                        <SortIcon
-                          direction={sort.field === sortField ? sort.dir : false}
-                        />
+                        <SortIcon direction={sort.field === sortField ? sort.dir : false} />
                       </button>
                     ) : (
-                      <span
-                        className={cn(
-                          'inline-flex w-full items-center whitespace-nowrap uppercase tracking-wide text-brand-muted',
-                          ALIGN_CLASS[align],
-                        )}
-                      >
+                      <span className={cn('inline-flex w-full items-center whitespace-nowrap uppercase tracking-wide text-brand-muted', ALIGN_CLASS[align])}>
                         {content}
                       </span>
                     )}
@@ -285,24 +224,13 @@ export function ListingsTable({
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody
-          className={cn(
-            loading && 'pointer-events-none opacity-50 transition-opacity',
-          )}
-        >
+        <TableBody className={cn(loading && 'pointer-events-none opacity-50 transition-opacity')}>
           {table.getRowModel().rows.map((row) => (
-            <TableRow
-              key={row.original.id}
-              className="cursor-pointer"
-              onClick={() => onRowClick(row.original)}
-            >
+            <TableRow key={row.original.id} className="cursor-pointer" onClick={() => onRowClick(row.original)}>
               {row.getVisibleCells().map((cell) => {
                 const meta = cell.column.columnDef.meta as ColumnMeta;
                 return (
-                  <TableCell
-                    key={cell.id}
-                    className={cn('text-brand-text', ALIGN_CLASS[meta.align])}
-                  >
+                  <TableCell key={cell.id} className={cn('text-brand-text', ALIGN_CLASS[meta.align])}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 );

@@ -1,53 +1,43 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import mongoose from 'mongoose';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Mail, Phone } from 'lucide-react';
 
 import { dbConnect } from '@/lib/mongodb';
 import { ListingModel, serializeListing, type IListing } from '@/lib/models/Listing';
 import { TopBar } from '@/components/layout/TopBar';
-import { StatusBadge } from '@/components/atoms/StatusBadge';
-import { ProfitCell } from '@/components/atoms/ProfitCell';
+import { GradeBadge } from '@/components/atoms/GradeBadge';
+import { GainCell } from '@/components/atoms/GainCell';
 import { Button } from '@/components/ui/button';
-import {
-  calcProfitPct,
-  formatCountyState,
-  formatCurrency,
-  formatDate,
-  formatPercent,
-} from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
+
+function pct(v: number | null | undefined): string {
+  return v === null || v === undefined ? '—' : `${(v * 100).toFixed(1)}%`;
+}
+function money(v: number | null | undefined): string {
+  return v === null || v === undefined ? '—' : formatCurrency(v);
+}
 
 function Metric({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-brand-border bg-brand-light/60 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-muted">
-        {label}
-      </p>
-      <p className="mt-0.5 text-base font-semibold tabular-nums text-brand-navy">
-        {children}
-      </p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-muted">{label}</p>
+      <p className="mt-0.5 text-base font-semibold tabular-nums text-brand-navy">{children}</p>
     </div>
   );
 }
-
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-muted">
-        {label}
-      </p>
-      <p className="mt-0.5 text-sm text-brand-text">{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-muted">{label}</p>
+      <p className="mt-0.5 break-words text-sm text-brand-text">{value}</p>
     </div>
   );
 }
 
-export default async function ListingDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function LeadDetailPage({ params }: { params: { id: string } }) {
   if (!mongoose.isValidObjectId(params.id)) notFound();
   await dbConnect();
   const doc = await ListingModel.findById(params.id).lean<IListing>();
@@ -56,72 +46,66 @@ export default async function ListingDetailPage({
 
   return (
     <>
-      <TopBar title="Listing Detail" breadcrumb="Brookhaven · RETT Opportunities">
+      <TopBar title="Lead Detail" breadcrumb="BrookHaven · Capital-Gains Outreach">
         <Button asChild variant="outline" size="sm">
           <Link href="/listings">
             <ArrowLeft className="h-4 w-4" />
-            Back to listings
+            Back to leads
           </Link>
         </Button>
       </TopBar>
 
       <div className="mx-auto max-w-3xl px-5 py-6 lg:px-8">
         <div className="overflow-hidden rounded-xl border border-brand-border bg-white">
-          <div className="flex items-start justify-between gap-4 border-b border-brand-border p-5">
+          <div className="flex items-start gap-3 border-b border-brand-border p-5">
+            <GradeBadge grade={l.grade} />
             <div>
-              <StatusBadge status={l.status} />
-              <h1 className="mt-2 text-xl font-bold text-brand-navy">
-                {l.streetAddress}
-              </h1>
+              <h1 className="text-xl font-bold text-brand-navy">{l.ownerName}</h1>
+              {l.llcName && <p className="text-sm text-brand-muted">{l.llcName}</p>}
               <p className="text-sm text-brand-muted">
-                {formatCountyState(l.county, l.state)}
+                {l.address}, {l.city}, {l.state} {l.zip ?? ''}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-4">
-            <Metric label="Purchase Price">{formatCurrency(l.purchasePrice)}</Metric>
-            <Metric label="List Price">{formatCurrency(l.listPrice)}</Metric>
-            <Metric label="Est. Profit">
-              <ProfitCell purchasePrice={l.purchasePrice} listPrice={l.listPrice} />
-            </Metric>
-            <Metric label="Profit %">
-              <span
-                className={
-                  calcProfitPct(l.purchasePrice, l.listPrice) >= 0
-                    ? 'text-status-active'
-                    : 'text-status-sold'
-                }
-              >
-                {formatPercent(calcProfitPct(l.purchasePrice, l.listPrice))}
-              </span>
-            </Metric>
+            <Metric label="Gain"><GainCell value={l.gain} compact={false} /></Metric>
+            <Metric label="Listed Price">{money(l.listedPrice)}</Metric>
+            <Metric label="Est. LTV">{pct(l.estLtv)}</Metric>
+            <Metric label="Years Held">{l.yearsSincePurchase ?? '—'}</Metric>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4 px-5 pb-5 sm:grid-cols-3">
-            <Detail label="County / State" value={formatCountyState(l.county, l.state)} />
-            <Detail label="Property Type" value={l.propertyType} />
-            <Detail label="MLS #" value={l.mlsNumber ?? '—'} />
-            <Detail label="Days on Market" value={l.daysOnMarket ?? '—'} />
-            <Detail
-              label="RETT Applicable"
-              value={l.rettApplicable ? 'Yes' : 'No'}
-            />
-            <Detail label="Listing Date" value={formatDate(l.listingDate)} />
-            <Detail label="Date Added" value={formatDate(l.importedAt)} />
-            {l.status === 'sold' && (
-              <Detail label="Sold Date" value={formatDate(l.soldDate)} />
+          <div className="flex flex-col gap-2 border-t border-brand-border px-5 py-4 text-sm">
+            {l.ownerPhone && (
+              <a href={`tel:${l.ownerPhone}`} className="inline-flex items-center gap-2 text-brand-accent hover:underline">
+                <Phone className="h-4 w-4" /> {l.ownerPhone}
+              </a>
+            )}
+            {l.ownerEmail && (
+              <a href={`mailto:${l.ownerEmail}`} className="inline-flex items-center gap-2 break-all text-brand-accent hover:underline">
+                <Mail className="h-4 w-4 shrink-0" /> {l.ownerEmail}
+              </a>
             )}
           </div>
 
-          {l.notes && (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 border-t border-brand-border px-5 py-5 sm:grid-cols-3">
+            <Detail label="Original Sale Price" value={money(l.originalSalePrice)} />
+            <Detail label="Sale Date" value={formatDate(l.saleDate)} />
+            <Detail label="Est. Loan Balance" value={money(l.estLoanBalance)} />
+            <Detail label="Original Loan" value={money(l.originalLoan)} />
+            <Detail label="Loan Status" value={l.loanStatus ?? '—'} />
+            <Detail label="Loan Source" value={l.loanSource ?? '—'} />
+            <Detail label="Lender" value={l.lender ?? '—'} />
+            <Detail label="Refi Amount" value={money(l.refiAmount)} />
+            <Detail label="Recorded Amount Paid" value={money(l.recordedAmountPaid)} />
+            <Detail label="Outreached By" value={l.outreachedBy ?? 'Unassigned'} />
+          </div>
+
+          {l.listingUrl && (
             <div className="px-5 pb-6">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-brand-muted">
-                Notes
-              </p>
-              <blockquote className="rounded-r-md border-l-2 border-brand-accent/40 bg-brand-light px-3 py-2 text-sm italic text-brand-text">
-                {l.notes}
-              </blockquote>
+              <a href={l.listingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-accent hover:underline">
+                <ExternalLink className="h-4 w-4" /> View listing
+              </a>
             </div>
           )}
         </div>

@@ -6,7 +6,7 @@ export interface StatCardProps {
   label: string;
   value: number | string;
   icon?: LucideIcon;
-  tone?: 'blue' | 'green' | 'gold' | 'red';
+  tone?: 'blue' | 'green' | 'gold' | 'red' | 'slate';
   trend?: { delta: number; period: string };
   loading?: boolean;
   className?: string;
@@ -21,6 +21,7 @@ const TONE_BG: Record<NonNullable<StatCardProps['tone']>, string> = {
   green: 'bg-[#e6f7ee]',
   gold: 'bg-[#fff8e6]',
   red: 'bg-[#fce8e6]',
+  slate: 'bg-[#eef1f6]',
 };
 
 export function StatCard({

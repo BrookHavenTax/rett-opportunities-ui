@@ -12,9 +12,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'RETT Opportunities Database — Brookhaven',
+  title: 'Capital-Gains Outreach — BrookHaven',
   description:
-    'Internal database of real estate transfer tax opportunity listings for Brookhaven staff.',
+    'Internal database of capital-gains outreach leads for BrookHaven Integrated Wealth Strategies.',
 };
 
 export default function RootLayout({

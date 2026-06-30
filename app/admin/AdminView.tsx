@@ -49,11 +49,11 @@ export function AdminView() {
 
   return (
     <>
-      <TopBar title="Import / Admin" breadcrumb="Brookhaven · RETT Opportunities">
+      <TopBar title="Import / Admin" breadcrumb="BrookHaven · Capital-Gains Outreach">
         <Button asChild variant="outline" size="sm">
           <Link href="/listings">
             <ArrowLeft className="h-4 w-4" />
-            Back to Listings
+            Back to Leads
           </Link>
         </Button>
         <Button variant="outline" size="sm" onClick={() => void loadRuns()}>
@@ -65,14 +65,14 @@ export function AdminView() {
       <div className="mx-auto max-w-5xl px-5 py-6 lg:px-8">
         <section className="mb-8">
           <h2 className="mb-1 text-lg font-bold text-brand-navy">
-            Monthly Excel Import
+            Monthly Deliverable Import
           </h2>
           <p className="mb-4 max-w-2xl text-sm text-brand-muted">
-            Upload the monthly master workbook. The pipeline parses the{' '}
-            <span className="font-medium text-brand-text">New Listings</span> and{' '}
-            <span className="font-medium text-brand-text">Sold Removed</span>{' '}
-            sheets, validates every row, archives sold properties, and inserts new
-            opportunities — atomically.
+            Upload the monthly{' '}
+            <span className="font-medium text-brand-text">Marketing Deliverable</span>{' '}
+            workbook. The pipeline validates every lead row and refreshes the
+            database — new leads are added and existing ones updated, while each
+            lead&apos;s Outreached owner and Notes are preserved — atomically.
           </p>
           <ImportDropzone onComplete={() => void loadRuns()} />
         </section>
@@ -91,7 +91,7 @@ export function AdminView() {
                   <TableHead>Date</TableHead>
                   <TableHead>Filename</TableHead>
                   <TableHead className="text-right">Added</TableHead>
-                  <TableHead className="text-right">Archived</TableHead>
+                  <TableHead className="text-right">Updated</TableHead>
                   <TableHead className="text-right">Errors</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -177,7 +177,7 @@ function RunRow({
           +{formatNumber(run.addedCount)}
         </TableCell>
         <TableCell className="text-right tabular-nums text-brand-muted">
-          {formatNumber(run.archivedCount)}
+          {formatNumber(run.updatedCount)}
         </TableCell>
         <TableCell
           className={cn(

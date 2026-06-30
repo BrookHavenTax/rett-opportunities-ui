@@ -31,7 +31,8 @@ import {
 import { formatNumber } from '@/lib/utils';
 import { PAGE_SIZE_OPTIONS, type FilterState } from '@/types/filters';
 import type {
-  CountyOption,
+  Facets,
+  Grade,
   Listing,
   ListingsResponse,
   OutreachedBy,
@@ -54,7 +55,7 @@ export function ListingsView() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [counties, setCounties] = useState<CountyOption[]>([]);
+  const [facets, setFacets] = useState<Facets>({ states: [], loanStatuses: [] });
   const [selected, setSelected] = useState<Listing | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notesListing, setNotesListing] = useState<Listing | null>(null);
@@ -86,7 +87,7 @@ export function ListingsView() {
         if (e instanceof DOMException && e.name === 'AbortError') return;
         setErrored(true);
         setLoading(false);
-        toast.error('Failed to load listings. Try again.');
+        toast.error('Failed to load leads. Try again.');
       });
 
     return () => ctrl.abort();
@@ -98,11 +99,9 @@ export function ListingsView() {
       .then((r) => (r.ok ? (r.json() as Promise<Stats>) : Promise.reject()))
       .then(setStats)
       .catch(() => undefined);
-    fetch('/api/listings/counties')
-      .then((r) =>
-        r.ok ? (r.json() as Promise<{ counties: CountyOption[] }>) : Promise.reject(),
-      )
-      .then((d) => setCounties(d.counties ?? []))
+    fetch('/api/listings/facets')
+      .then((r) => (r.ok ? (r.json() as Promise<Facets>) : Promise.reject()))
+      .then((d) => setFacets({ states: d.states ?? [], loanStatuses: d.loanStatuses ?? [] }))
       .catch(() => undefined);
   }, []);
 
@@ -190,7 +189,7 @@ export function ListingsView() {
 
   return (
     <>
-      <TopBar title="RETT Opportunities" breadcrumb="Brookhaven · Internal Tools">
+      <TopBar title="Capital-Gains Outreach" breadcrumb="BrookHaven · Wealth Strategies">
         <Button asChild variant="outline" size="sm">
           <Link href="/admin">
             <Upload className="h-4 w-4" />
@@ -207,8 +206,8 @@ export function ListingsView() {
         <StatsBar
           stats={stats}
           loading={!stats}
-          selectedStatus={filters.status}
-          onSelectStatus={(statuses) => update({ status: statuses })}
+          selectedGrades={filters.grades}
+          onSelectGrades={(grades: Grade[]) => update({ grades })}
           className="mb-5"
         />
 
@@ -217,11 +216,12 @@ export function ListingsView() {
           <SearchBar
             value={filters.q}
             onChange={(q) => update({ q })}
+            placeholder="Search owner, address, city, email…"
             resultCount={hasLoaded ? total : undefined}
           />
           <FilterBar
             filters={filters}
-            counties={counties}
+            facets={facets}
             onChange={update}
             onClear={clearAll}
           />
@@ -345,7 +345,7 @@ function EmptyState({ onClear }: { onClear: () => void }) {
         <SearchX className="h-6 w-6 text-brand-muted" />
       </div>
       <p className="text-sm font-medium text-brand-navy">
-        No listings match your filters.
+        No leads match your filters.
       </p>
       <Button variant="outline" size="sm" onClick={onClear}>
         <RotateCcw className="h-4 w-4" />
@@ -359,7 +359,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-status-sold/40 bg-white py-20 text-center">
       <p className="text-sm font-medium text-status-sold">
-        Failed to load listings.
+        Failed to load leads.
       </p>
       <Button variant="outline" size="sm" onClick={onRetry}>
         Try again

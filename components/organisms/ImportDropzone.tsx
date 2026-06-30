@@ -98,7 +98,7 @@ export function ImportDropzone({ onComplete, className }: ImportDropzoneProps) {
         if (xhr.status >= 200 && xhr.status < 300) {
           const data = (payload ?? {}) as Partial<ImportResult>;
           const added = data.addedCount ?? 0;
-          const archived = data.archivedCount ?? 0;
+          const updated = data.updatedCount ?? 0;
           const errors: ImportError[] = Array.isArray(data.errors)
             ? data.errors
             : [];
@@ -106,7 +106,7 @@ export function ImportDropzone({ onComplete, className }: ImportDropzoneProps) {
 
           const normalized: ImportResult = {
             addedCount: added,
-            archivedCount: archived,
+            updatedCount: updated,
             errorCount,
             errors,
             importRunId: data.importRunId ?? '',
@@ -117,7 +117,7 @@ export function ImportDropzone({ onComplete, className }: ImportDropzoneProps) {
           setState('success');
           onComplete?.(normalized);
           toast.success(
-            `${formatNumber(added)} added · ${formatNumber(archived)} archived`,
+            `${formatNumber(added)} added · ${formatNumber(updated)} updated`,
           );
           return;
         }
@@ -314,7 +314,7 @@ export function ImportDropzone({ onComplete, className }: ImportDropzoneProps) {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-brand-navy">
                 ✓ {formatNumber(result.addedCount)} added ·{' '}
-                {formatNumber(result.archivedCount)} archived ·{' '}
+                {formatNumber(result.updatedCount)} updated ·{' '}
                 {formatNumber(result.errorCount)} errors
               </p>
               {fileName && (

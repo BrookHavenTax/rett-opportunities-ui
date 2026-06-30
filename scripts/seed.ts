@@ -35,7 +35,7 @@ async function main() {
 
   const result = await seedDatabase({ reset: true });
   console.log(
-    `[seed] Done — inserted ${result.listings} listings across ${result.runs} import runs.`,
+    `[seed] Done — inserted ${result.leads} sample leads across ${result.runs} import run(s).`,
   );
 
   await dbDisconnect();

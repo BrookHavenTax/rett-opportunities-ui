@@ -1,29 +1,20 @@
 import ExcelJS from 'exceljs';
 import mongoose, { type ClientSession } from 'mongoose';
 import { dbConnect } from '@/lib/mongodb';
-import { ListingModel } from '@/lib/models/Listing';
+import { ListingModel, gradeRank } from '@/lib/models/Listing';
 import { ImportRunModel } from '@/lib/models/ImportRun';
-import {
-  newListingRowSchema,
-  soldRowSchema,
-  type NewListingRow,
-} from '@/lib/schemas/listing';
+import { newListingRowSchema, type NewListingRow } from '@/lib/schemas/listing';
 import type { ImportError, ImportResult } from '@/types/listing';
 
 /**
- * Excel import + reconciliation pipeline.
+ * Excel import for the "Marketing Deliverable" sheet.
  *
- * Expects a workbook with two sheets (names are matched case-insensitively):
- *   • "New Listings"  — opportunities to INSERT
- *   • "Sold Removed"  — existing listings to ARCHIVE (status → sold)
- *
- * Invalid rows are collected into `errors` and skipped (the rest still import).
- * The reconciliation (archive + insert + write run record) runs inside a single
- * MongoDB transaction so it is atomic: all-or-nothing. On a fatal error the
- * transaction rolls back and a `failed` ImportRun is recorded for the audit log.
+ * The sheet has two banner rows, then a header row, then the lead rows. The
+ * header row is auto-detected. Each row is validated; valid rows are upserted
+ * by (ownerName + address): existing leads are refreshed with the new imported
+ * values while their staff fields (outreachedBy, comments) are preserved. The
+ * whole reconciliation runs in a single transaction.
  */
-
-/* ── Cell extraction ───────────────────────────────────────────────────── */
 
 type Primitive = string | number | boolean | Date | null | undefined;
 
@@ -37,9 +28,7 @@ function cellValue(cell: ExcelJS.Cell | undefined): Primitive {
     if ('text' in obj && obj.text != null) return String(obj.text);
     if ('result' in obj && obj.result != null) return obj.result as Primitive;
     if ('richText' in obj && Array.isArray(obj.richText)) {
-      return (obj.richText as { text?: string }[])
-        .map((rt) => rt.text ?? '')
-        .join('');
+      return (obj.richText as { text?: string }[]).map((rt) => rt.text ?? '').join('');
     }
     if ('hyperlink' in obj && obj.hyperlink != null) return String(obj.hyperlink);
     return undefined;
@@ -47,47 +36,106 @@ function cellValue(cell: ExcelJS.Cell | undefined): Primitive {
   return v as Primitive;
 }
 
-function norm(header: string): string {
-  return header.toLowerCase().replace(/[^a-z0-9]/g, '');
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
-
-/** A cell counts as blank if it is null/undefined or whitespace-only. */
 function isBlank(v: Primitive): boolean {
   return v === null || v === undefined || String(v).trim() === '';
 }
 
-/** Build normalized-header → column-number map for a sheet's header row. */
-function headerMap(sheet: ExcelJS.Worksheet): Map<string, number> {
-  const map = new Map<string, number>();
-  const headerRow = sheet.getRow(1);
-  headerRow.eachCell((cell, col) => {
+/** Normalized header → field name. */
+const HEADER_FIELD: Record<string, keyof NewListingRow> = {
+  grade: 'grade',
+  ownername: 'ownerName',
+  llcname: 'llcName',
+  address: 'address',
+  city: 'city',
+  state: 'state',
+  zip: 'zip',
+  ownerphone: 'ownerPhone',
+  owneremail: 'ownerEmail',
+  gain: 'gain',
+  estloanbalance: 'estLoanBalance',
+  agentphone: 'agentPhone',
+  agentname: 'agentName',
+  originalsaleprice: 'originalSalePrice',
+  saledate: 'saleDate',
+  yearssincepurchase: 'yearsSincePurchase',
+  listedprice: 'listedPrice',
+  loanstatus: 'loanStatus',
+  originalloan: 'originalLoan',
+  loansource: 'loanSource',
+  lender: 'lender',
+  loandate: 'loanDate',
+  refiamount: 'refiAmount',
+  recordedamountpaid: 'recordedAmountPaid',
+  estltv: 'estLtv',
+  listingurl: 'listingUrl',
+};
+
+/** Find the row that holds the column headers (skip the banner rows). */
+function findHeaderRow(sheet: ExcelJS.Worksheet): number {
+  const limit = Math.min(12, sheet.rowCount);
+  for (let r = 1; r <= limit; r++) {
+    const seen = new Set<string>();
+    sheet.getRow(r).eachCell({ includeEmpty: false }, (cell) => {
+      const raw = cellValue(cell);
+      if (raw != null) seen.add(norm(String(raw)));
+    });
+    if (seen.has('grade') && seen.has('ownername') && seen.has('address')) return r;
+  }
+  return 1;
+}
+
+function buildColumnMap(sheet: ExcelJS.Worksheet, headerRow: number): Map<keyof NewListingRow, number> {
+  const map = new Map<keyof NewListingRow, number>();
+  sheet.getRow(headerRow).eachCell({ includeEmpty: false }, (cell, col) => {
     const raw = cellValue(cell);
-    if (raw != null && String(raw).trim() !== '') {
-      map.set(norm(String(raw)), col);
-    }
+    if (raw == null) return;
+    const field = HEADER_FIELD[norm(String(raw))];
+    if (field && !map.has(field)) map.set(field, col);
   });
   return map;
 }
 
-/** Find the column whose normalized header satisfies the predicate. */
-function findCol(
-  headers: Map<string, number>,
-  predicate: (h: string) => boolean,
-): number | undefined {
-  for (const [h, col] of headers) if (predicate(h)) return col;
-  return undefined;
+type PreparedRow = {
+  key: { ownerName: string; address: string };
+  doc: Record<string, unknown>;
+};
+
+function rowToDoc(d: NewListingRow, now: Date, runId: mongoose.Types.ObjectId): Record<string, unknown> {
+  return {
+    grade: d.grade,
+    gradeRank: gradeRank(d.grade as never),
+    ownerName: d.ownerName,
+    llcName: d.llcName ?? null,
+    address: d.address,
+    city: d.city,
+    state: d.state,
+    zip: d.zip ?? null,
+    ownerPhone: d.ownerPhone ?? null,
+    ownerEmail: d.ownerEmail ?? null,
+    gain: d.gain,
+    estLoanBalance: d.estLoanBalance ?? null,
+    agentName: d.agentName ?? null,
+    agentPhone: d.agentPhone ?? null,
+    originalSalePrice: d.originalSalePrice ?? null,
+    saleDate: d.saleDate ?? null,
+    yearsSincePurchase: d.yearsSincePurchase ?? null,
+    listedPrice: d.listedPrice ?? null,
+    loanStatus: d.loanStatus ?? null,
+    originalLoan: d.originalLoan ?? null,
+    loanSource: d.loanSource ?? null,
+    lender: d.lender ?? null,
+    loanDate: d.loanDate ?? null,
+    refiAmount: d.refiAmount ?? null,
+    recordedAmountPaid: d.recordedAmountPaid ?? null,
+    estLtv: d.estLtv ?? null,
+    listingUrl: d.listingUrl ?? null,
+    importedAt: now,
+    importRunId: runId,
+  };
 }
-
-/* ── Sheet resolution ──────────────────────────────────────────────────── */
-
-function findSheet(
-  wb: ExcelJS.Workbook,
-  predicate: (name: string) => boolean,
-): ExcelJS.Worksheet | undefined {
-  return wb.worksheets.find((ws) => predicate(ws.name.trim().toLowerCase()));
-}
-
-/* ── Helpers ───────────────────────────────────────────────────────────── */
 
 function isTxnUnsupported(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
@@ -101,179 +149,6 @@ function isTxnUnsupported(err: unknown): boolean {
   );
 }
 
-interface PreparedNew {
-  row: number;
-  doc: {
-    streetAddress: string;
-    address: string;
-    county: string;
-    state: string;
-    propertyType: NewListingRow['propertyType'];
-    mlsNumber?: string;
-    purchasePrice: number;
-    listPrice: number;
-    listingDate?: Date | null;
-    daysOnMarket?: number | null;
-    rettApplicable: boolean;
-    notes?: string;
-    comments?: { body: string; pinned: boolean }[];
-  };
-}
-
-interface PreparedSold {
-  row: number;
-  address?: string;
-  mlsNumber?: string;
-  soldDate?: Date;
-}
-
-/* ── Parsing ───────────────────────────────────────────────────────────── */
-
-function parseNewListings(
-  sheet: ExcelJS.Worksheet | undefined,
-  errors: ImportError[],
-): PreparedNew[] {
-  if (!sheet) return [];
-  const h = headerMap(sheet);
-  const col = {
-    address: findCol(h, (x) => x.includes('address')),
-    county: findCol(h, (x) => x === 'county' || x.includes('county')),
-    state: findCol(h, (x) => x === 'state' || x.includes('state')),
-    propertyType: findCol(h, (x) => x.includes('propertytype') || x.includes('type')),
-    mls: findCol(h, (x) => x.includes('mls')),
-    purchase: findCol(h, (x) => x.includes('purchase')),
-    list: findCol(h, (x) => x.includes('listprice') || (x.includes('list') && x.includes('price'))),
-    listingDate: findCol(h, (x) => x.includes('listingdate') || (x.includes('list') && x.includes('date'))),
-    dom: findCol(h, (x) => x.includes('days')),
-    rett: findCol(h, (x) => x.includes('rett')),
-    notes: findCol(h, (x) => x.includes('note')),
-  };
-
-  const out: PreparedNew[] = [];
-  const lastRow = sheet.rowCount;
-
-  for (let r = 2; r <= lastRow; r++) {
-    const row = sheet.getRow(r);
-    const get = (c: number | undefined) => (c ? cellValue(row.getCell(c)) : undefined);
-
-    const addressRaw = get(col.address);
-    const purchaseRaw = get(col.purchase);
-    const listRaw = get(col.list);
-
-    // Skip genuinely empty rows silently (no error noise).
-    if (isBlank(addressRaw) && isBlank(purchaseRaw) && isBlank(listRaw)) {
-      continue;
-    }
-
-    const parsed = newListingRowSchema.safeParse({
-      address: addressRaw,
-      county: get(col.county),
-      state: get(col.state),
-      propertyType: get(col.propertyType),
-      mlsNumber: get(col.mls),
-      purchasePrice: purchaseRaw,
-      listPrice: listRaw,
-      listingDate: get(col.listingDate),
-      daysOnMarket: get(col.dom),
-      rettApplicable: get(col.rett),
-      notes: get(col.notes),
-    });
-
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        errors.push({
-          row: r,
-          field: String(issue.path[0] ?? 'row'),
-          message: issue.message,
-          sheet: sheet.name,
-        });
-      }
-      continue;
-    }
-
-    const d = parsed.data;
-    out.push({
-      row: r,
-      doc: {
-        streetAddress: d.address,
-        address: `${d.address}, ${d.county}, ${d.state}`,
-        county: d.county,
-        state: d.state,
-        propertyType: d.propertyType,
-        ...(d.mlsNumber ? { mlsNumber: d.mlsNumber } : {}),
-        purchasePrice: d.purchasePrice,
-        listPrice: d.listPrice,
-        listingDate: d.listingDate ?? null,
-        daysOnMarket: d.daysOnMarket ?? null,
-        rettApplicable: d.rettApplicable,
-        // The import note (if any) is preserved AND surfaced as a pinned note.
-        ...(d.notes
-          ? { notes: d.notes, comments: [{ body: d.notes, pinned: true }] }
-          : {}),
-      },
-    });
-  }
-
-  return out;
-}
-
-function parseSold(
-  sheet: ExcelJS.Worksheet | undefined,
-  errors: ImportError[],
-): PreparedSold[] {
-  if (!sheet) return [];
-  const h = headerMap(sheet);
-  const col = {
-    address: findCol(h, (x) => x.includes('address')),
-    mls: findCol(h, (x) => x.includes('mls')),
-    soldDate: findCol(h, (x) => x.includes('sold') || x.includes('date')),
-  };
-
-  const out: PreparedSold[] = [];
-  const lastRow = sheet.rowCount;
-
-  for (let r = 2; r <= lastRow; r++) {
-    const row = sheet.getRow(r);
-    const get = (c: number | undefined) => (c ? cellValue(row.getCell(c)) : undefined);
-
-    const addressRaw = get(col.address);
-    const mlsRaw = get(col.mls);
-
-    if (isBlank(addressRaw) && isBlank(mlsRaw)) {
-      continue; // empty row
-    }
-
-    const parsed = soldRowSchema.safeParse({
-      address: addressRaw,
-      mlsNumber: mlsRaw,
-      soldDate: get(col.soldDate),
-    });
-
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        errors.push({
-          row: r,
-          field: String(issue.path[0] ?? 'row'),
-          message: issue.message,
-          sheet: sheet.name,
-        });
-      }
-      continue;
-    }
-
-    out.push({
-      row: r,
-      address: parsed.data.address,
-      mlsNumber: parsed.data.mlsNumber,
-      soldDate: parsed.data.soldDate,
-    });
-  }
-
-  return out;
-}
-
-/* ── Main entry ────────────────────────────────────────────────────────── */
-
 export async function runImportPipeline(
   buffer: Buffer,
   filename: string,
@@ -282,8 +157,6 @@ export async function runImportPipeline(
   const now = new Date();
   const errors: ImportError[] = [];
 
-  // Ensure collections exist so the first write inside the transaction does not
-  // fail on namespace creation (matters for a brand-new/empty database).
   await Promise.all([
     ListingModel.createCollection().catch(() => undefined),
     ImportRunModel.createCollection().catch(() => undefined),
@@ -292,116 +165,91 @@ export async function runImportPipeline(
   try {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
+    const sheet =
+      wb.worksheets.find((w) => norm(w.name).includes('deliverable') || norm(w.name).includes('marketing')) ??
+      wb.worksheets[0];
+    if (!sheet) throw new Error('Workbook has no worksheets.');
 
-    const newSheet = findSheet(wb, (n) => n.includes('new'));
-    const soldSheet = findSheet(wb, (n) => n.includes('sold') || n.includes('remov'));
-
-    if (!newSheet && !soldSheet) {
-      throw new Error(
-        'Workbook must contain a "New Listings" and/or "Sold Removed" sheet.',
-      );
+    const headerRow = findHeaderRow(sheet);
+    const cols = buildColumnMap(sheet, headerRow);
+    if (!cols.has('grade') || !cols.has('ownerName') || !cols.has('address')) {
+      throw new Error('Could not find the expected header row (Grade / Owner Name / Address).');
     }
 
-    const preparedNew = parseNewListings(newSheet, errors);
-    const preparedSold = parseSold(soldSheet, errors);
+    // Parse + validate.
+    const prepared: PreparedRow[] = [];
+    const runId = new mongoose.Types.ObjectId();
+    for (let r = headerRow + 1; r <= sheet.rowCount; r++) {
+      const row = sheet.getRow(r);
+      const get = (f: keyof NewListingRow) => {
+        const c = cols.get(f);
+        return c ? cellValue(row.getCell(c)) : undefined;
+      };
 
-    const reconcile = async (
-      session: ClientSession | null,
-    ): Promise<ImportResult> => {
+      // Skip blank rows silently.
+      if (isBlank(get('grade')) && isBlank(get('ownerName')) && isBlank(get('address'))) continue;
+
+      const raw: Record<string, unknown> = {};
+      for (const field of cols.keys()) raw[field] = get(field);
+
+      const parsed = newListingRowSchema.safeParse(raw);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          errors.push({
+            row: r,
+            field: String(issue.path[0] ?? 'row'),
+            message: issue.message,
+            sheet: sheet.name,
+          });
+        }
+        continue;
+      }
+      const d = parsed.data;
+      prepared.push({
+        key: { ownerName: d.ownerName, address: d.address },
+        doc: rowToDoc(d, now, runId),
+      });
+    }
+
+    const reconcile = async (session: ClientSession | null): Promise<ImportResult> => {
       const run = new ImportRunModel({
+        _id: runId,
         filename,
         importedAt: now,
         addedCount: 0,
-        archivedCount: 0,
+        updatedCount: 0,
         errorCount: 0,
         errors: [],
         status: 'success',
       });
-      const runId = run._id;
-      const opt = session ? { session } : {};
-      // Work on a private copy so a retried transaction body stays idempotent.
       const runErrors: ImportError[] = [...errors];
 
-      // 1) Archive sold/removed listings.
-      let archivedCount = 0;
-      for (const sold of preparedSold) {
-        const or: Record<string, unknown>[] = [];
-        if (sold.mlsNumber) or.push({ mlsNumber: sold.mlsNumber });
-        if (sold.address) {
-          or.push({ streetAddress: sold.address }, { address: sold.address });
-        }
-        if (or.length === 0) continue;
+      let addedCount = 0;
+      let updatedCount = 0;
 
-        const res = await ListingModel.updateOne(
-          { status: { $ne: 'sold' }, $or: or },
-          {
-            $set: {
-              status: 'sold',
-              soldDate: sold.soldDate ?? now,
-              soldImportRunId: runId,
-            },
+      if (prepared.length > 0) {
+        const ops = prepared.map((p) => ({
+          updateOne: {
+            filter: { ownerName: p.key.ownerName, address: p.key.address },
+            update: { $set: p.doc },
+            upsert: true,
           },
-          opt,
-        );
-        if (res.matchedCount > 0) {
-          archivedCount += 1;
-        } else {
-          runErrors.push({
-            row: sold.row,
-            field: 'match',
-            message: `No active listing matched (${sold.mlsNumber ?? sold.address ?? '—'}).`,
-            sheet: soldSheet?.name ?? 'Sold Removed',
-          });
-        }
+        }));
+        const res = await ListingModel.bulkWrite(ops, session ? { session } : {});
+        addedCount = res.upsertedCount ?? 0;
+        updatedCount = res.matchedCount ?? 0;
       }
 
-      // 2) De-duplicate new listings (within file + against existing non-sold DB rows).
-      const seenAddr = new Set<string>();
-      const seenMls = new Set<string>();
-      const toInsert: Record<string, unknown>[] = [];
-
-      for (const item of preparedNew) {
-        const addrKey = item.doc.streetAddress.toLowerCase();
-        const mlsKey = item.doc.mlsNumber?.toLowerCase();
-        if (seenAddr.has(addrKey) || (mlsKey && seenMls.has(mlsKey))) continue;
-
-        const dupOr: Record<string, unknown>[] = [{ streetAddress: item.doc.streetAddress }];
-        if (item.doc.mlsNumber) dupOr.push({ mlsNumber: item.doc.mlsNumber });
-        const existing = await ListingModel.findOne(
-          { status: { $ne: 'sold' }, $or: dupOr },
-          { _id: 1 },
-          opt,
-        );
-        if (existing) continue; // already in DB → skip silently
-
-        seenAddr.add(addrKey);
-        if (mlsKey) seenMls.add(mlsKey);
-        toInsert.push({
-          ...item.doc,
-          status: 'new',
-          importedAt: now,
-          importRunId: runId,
-        });
-      }
-
-      // 3) Insert new listings.
-      if (toInsert.length > 0) {
-        await ListingModel.insertMany(toInsert, session ? { session } : {});
-      }
-
-      // 4) Write the run record.
-      run.addedCount = toInsert.length;
-      run.archivedCount = archivedCount;
+      run.addedCount = addedCount;
+      run.updatedCount = updatedCount;
       run.errorCount = runErrors.length;
-      // `errors` is a reserved Document key — assign via set() to avoid the
-      // Document.errors (ValidationError) type collision.
       run.set('errors', runErrors);
       run.status = runErrors.length > 0 ? 'partial' : 'success';
-      await run.save(opt);
+      await run.save(session ? { session } : {});
 
       return {
-        addedCount: toInsert.length,
-        archivedCount,
+        addedCount,
+        updatedCount,
         errorCount: runErrors.length,
         errors: runErrors,
         importRunId: String(runId),
@@ -409,8 +257,6 @@ export async function runImportPipeline(
       };
     };
 
-    // Run inside a transaction; fall back to non-transactional only if the
-    // topology genuinely does not support transactions (nothing committed yet).
     const session = await mongoose.startSession();
     try {
       let result: ImportResult | undefined;
@@ -419,21 +265,18 @@ export async function runImportPipeline(
       });
       return result!;
     } catch (txnErr) {
-      if (isTxnUnsupported(txnErr)) {
-        return await reconcile(null);
-      }
+      if (isTxnUnsupported(txnErr)) return await reconcile(null);
       throw txnErr;
     } finally {
       await session.endSession();
     }
   } catch (fatal) {
     const message = fatal instanceof Error ? fatal.message : 'Unknown import error';
-    // Record a failed run for the audit trail (best-effort, outside any txn).
     const failed = await ImportRunModel.create({
       filename,
       importedAt: now,
       addedCount: 0,
-      archivedCount: 0,
+      updatedCount: 0,
       errorCount: errors.length + 1,
       errors: [...errors, { row: 0, field: 'fatal', message }],
       status: 'failed',
@@ -441,7 +284,7 @@ export async function runImportPipeline(
 
     return {
       addedCount: 0,
-      archivedCount: 0,
+      updatedCount: 0,
       errorCount: errors.length + 1,
       errors: [...errors, { row: 0, field: 'fatal', message }],
       importRunId: failed ? String(failed._id) : '',

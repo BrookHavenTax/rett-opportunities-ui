@@ -6,7 +6,7 @@ export interface IImportRun {
   filename: string;
   importedAt: Date;
   addedCount: number;
-  archivedCount: number;
+  updatedCount: number;
   errorCount: number;
   errors: ImportError[];
   status: ImportRunStatus;
@@ -29,7 +29,7 @@ const ImportRunSchema = new Schema<IImportRun>(
     filename: { type: String, required: true },
     importedAt: { type: Date, required: true, default: Date.now },
     addedCount: { type: Number, required: true, default: 0 },
-    archivedCount: { type: Number, required: true, default: 0 },
+    updatedCount: { type: Number, required: true, default: 0 },
     errorCount: { type: Number, required: true, default: 0 },
     errors: { type: [ImportErrorSchema], default: [] },
     status: {
@@ -61,7 +61,7 @@ export function serializeImportRun(doc: RawImportRun): ImportRun {
     filename: doc.filename ?? '',
     importedAt: iso(doc.importedAt),
     addedCount: doc.addedCount ?? 0,
-    archivedCount: doc.archivedCount ?? 0,
+    updatedCount: doc.updatedCount ?? 0,
     errorCount: doc.errorCount ?? 0,
     errors: (doc.errors ?? []) as ImportError[],
     status: (doc.status ?? 'success') as ImportRunStatus,

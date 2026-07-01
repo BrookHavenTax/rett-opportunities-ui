@@ -10,6 +10,12 @@ export interface IComment {
   updatedAt: Date;
 }
 
+/** Captures any column not mapped to a first-class field (future-proofing). */
+export interface IExtra {
+  label: string;
+  value: string;
+}
+
 export interface IListing {
   _id: Types.ObjectId;
   grade: Grade;
@@ -40,6 +46,7 @@ export interface IListing {
   recordedAmountPaid?: number | null;
   estLtv?: number | null;
   listingUrl?: string;
+  extra: IExtra[];
   outreachedBy?: OutreachedBy | null;
   comments: Types.DocumentArray<IComment>;
   importedAt: Date;
@@ -59,6 +66,11 @@ const CommentSchema = new Schema<IComment>(
     pinned: { type: Boolean, default: false },
   },
   { timestamps: true },
+);
+
+const ExtraSchema = new Schema<IExtra>(
+  { label: { type: String, required: true }, value: { type: String, default: '' } },
+  { _id: false },
 );
 
 const ListingSchema = new Schema<IListing>(
@@ -90,6 +102,7 @@ const ListingSchema = new Schema<IListing>(
     recordedAmountPaid: { type: Number, default: null },
     estLtv: { type: Number, default: null },
     listingUrl: { type: String, trim: true },
+    extra: { type: [ExtraSchema], default: [] },
     outreachedBy: {
       type: String,
       enum: [...OUTREACH_OPTIONS, null],
@@ -156,6 +169,7 @@ export function serializeListing(doc: RawListing): Listing {
     recordedAmountPaid: doc.recordedAmountPaid ?? null,
     estLtv: doc.estLtv ?? null,
     listingUrl: doc.listingUrl ?? null,
+    extra: (doc.extra ?? []).map((e) => ({ label: e.label ?? '', value: e.value ?? '' })),
     outreachedBy: (doc.outreachedBy as OutreachedBy | null | undefined) ?? null,
     comments: (doc.comments ?? []).map(
       (c): ListingComment => ({

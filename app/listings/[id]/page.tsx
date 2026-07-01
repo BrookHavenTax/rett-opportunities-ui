@@ -99,6 +99,9 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
             <Detail label="Refi Amount" value={money(l.refiAmount)} />
             <Detail label="Recorded Amount Paid" value={money(l.recordedAmountPaid)} />
             <Detail label="Outreached By" value={l.outreachedBy ?? 'Unassigned'} />
+            {l.extra.map((e, i) => (
+              <Detail key={`x${i}`} label={e.label} value={e.value || '—'} />
+            ))}
           </div>
 
           {l.listingUrl && (

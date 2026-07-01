@@ -229,7 +229,9 @@ export async function runImportPipeline(
       const extra: { label: string; value: string }[] = [];
       for (const ec of extraCols) {
         const v = cellValue(row.getCell(ec.col));
-        if (!isBlank(v)) extra.push({ label: ec.label, value: String(v).trim() });
+        if (!isBlank(v)) {
+          extra.push({ label: ec.label.slice(0, 200), value: String(v).trim().slice(0, 2000) });
+        }
       }
       prepared.push({
         key: { ownerName: d.ownerName, address: d.address },

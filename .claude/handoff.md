@@ -6,9 +6,11 @@ domain is **capital-gains outreach leads**.)_
 
 ## Current state: DEPLOYED TO PRODUCTION on EC2 — live & verified
 
-Public URL: **http://3.15.178.38:3000** (HTTP, port 3000). Running under PM2,
-backed by a local MongoDB single-node replica set. 661 real leads loaded from the
-Marketing Deliverable sheet. Green bar (typecheck + lint + prod build) passing.
+Public URL: **http://3.15.178.38** (port 80 via nginx → app on 3000). Running under
+PM2, backed by a local MongoDB single-node replica set. 661 real leads loaded from
+the Marketing Deliverable sheet. Green bar (typecheck + lint + prod build) passing.
+_(Requires an inbound security-group rule for TCP 80. Port 3000 can be closed once
+80 is confirmed — nginx is the single entry point going forward.)_
 
 ### Production infrastructure (EC2)
 
@@ -19,12 +21,16 @@ Marketing Deliverable sheet. Green bar (typecheck + lint + prod build) passing.
   served by `pm2 start npm --name rett -- start` (Next `start`, binds 0.0.0.0:3000).
   PM2 boot-persistence enabled (`systemctl is-enabled pm2-ubuntu` → enabled;
   `pm2 save` done). Restart on crash is automatic.
+- **Reverse proxy:** nginx listens on **port 80** and proxies to `127.0.0.1:3000`
+  (`/etc/nginx/sites-available/rett`, symlinked into `sites-enabled`, default site
+  removed). `client_max_body_size 25m` so the .xlsx import isn't blocked. Enabled on
+  boot. This is where the shared-password (basic auth) and TLS will be added later.
 - **Database:** MongoDB 8.0.26, local only (`bindIp 127.0.0.1`, replSet `rs0`,
   wiredTiger cache 0.25 GB). Auto-starts on boot (`systemctl enable mongod`).
   Single-node RS is initiated → transactions work (import runs its txn path).
 - **`.env.local` (prod, on box, NOT in git):**
   `MONGODB_URI=mongodb://127.0.0.1:27017/rett?replicaSet=rs0`,
-  `NEXT_PUBLIC_APP_URL=http://3.15.178.38:3000`. **`ADMIN_SECRET` intentionally
+  `NEXT_PUBLIC_APP_URL=http://3.15.178.38` (port-less, matches nginx). **`ADMIN_SECRET` intentionally
   unset** so the browser Import button works (no secret a browser could hold).
 - **Disk:** EBS grown 8 GB → **30 GB** (was 100% full and crashed mongod; now ~30%
   used). **Swap: 4 GB** (`/swapfile` + `/swapfile2`, both in `/etc/fstab`).
@@ -66,6 +72,8 @@ this override or mongod will not start.
   then on the box: `cd ~/rett-app && npm ci` (only if deps changed) `&& npm run build && pm2 restart rett && pm2 save`.
 - **Import new monthly sheet:** use the website **Import Excel** button (Listings →
   Import). It cross-references and upserts; existing notes/assignees are safe.
+- **nginx:** config at `/etc/nginx/sites-available/rett`; after edits
+  `sudo nginx -t && sudo systemctl reload nginx`. Access logs in `/var/log/nginx/`.
 - **Logs:** `pm2 logs rett`; Mongo: `sudo tail -f /var/log/mongodb/mongod.log`.
 - **Health:** `curl localhost:3000/api/stats`; `pm2 list`; `systemctl is-active mongod`.
 - **Mongo shell:** `mongosh` (localhost). RS status: `mongosh --eval 'rs.status().myState'` (1 = PRIMARY).

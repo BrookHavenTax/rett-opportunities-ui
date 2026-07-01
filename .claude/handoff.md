@@ -1,70 +1,94 @@
-# Handoff — RETT Opportunities Database
+# Handoff — Capital-Gains Outreach (BrookHaven)
 
-_Last updated: 2026-06-16. Single source of truth for the project's current state._
+_Last updated: 2026-07-01. Single source of truth for the project's current state._
+_(Repo/routes are still named `rett-*` / `/listings` / `Listing` internally; the
+domain is **capital-gains outreach leads**.)_
 
-## Current state: Phase 1 complete & verified
+## Current state: DEPLOYED TO PRODUCTION on EC2 — live & verified
 
-A full, working internal Next.js 14 app. Green bar (typecheck + lint + production
-build) all passing. Verified in the running app and via API/pipeline tests.
+Public URL: **http://3.15.178.38:3000** (HTTP, port 3000). Running under PM2,
+backed by a local MongoDB single-node replica set. 661 real leads loaded from the
+Marketing Deliverable sheet. Green bar (typecheck + lint + prod build) passing.
 
-### What works today
+### Production infrastructure (EC2)
 
-- **/listings** — stats bar (Total/Active/New/Sold), full-text search (300ms
-  debounce), 9-section filter sidebar (status, county/state multiselect, dual-handle
-  price & profit sliders, profit % inputs, month-range date-added, property type,
-  days-on-market, RETT toggle), sortable TanStack table, dismissible active-filter
-  chips, pagination (25/50/100), CSV export. **All state is URL-serialized.**
-- **Detail drawer** — right-side slide-over with key metrics, full details, notes,
-  Copy Link + Export-this-listing. Opens on row click; ESC/backdrop close.
-- **/listings/[id]** — server-rendered permalink (the Copy Link target).
-- **/admin** — drag-and-drop .xlsx import with progress + result summary + error
-  accordion, plus an expandable import-history table.
-- **API** — `/api/listings`, `/api/listings/[id]`, `/api/listings/counties`,
-  `/api/stats` (5-min cache), `/api/export` (CSV), `/api/import` (POST .xlsx),
-  `/api/import/runs`.
-- **Import pipeline** — parses "New Listings" + "Sold Removed" sheets, validates with
-  zod, dedupes, archives sold, inserts new — all in one MongoDB transaction. Invalid
-  rows skipped & recorded; empty rows skipped silently; unmatched sold rows flagged.
-- **Local dev needs no database** — in-memory replica set auto-seeds 50 listings + 4
-  import runs on first boot.
+- **Instance:** `i-0d0695b25d66487e8`, Ubuntu 26.04, kernel `7.0.0-1006-aws`,
+  ~908 MB RAM, 2 vCPU. Public IP `3.15.178.38`, private `172.31.38.92`.
+  SSH: `ssh -i <rett-database-website.pem> ubuntu@3.15.178.38`.
+- **App:** `/home/ubuntu/rett-app`, Node v22, built with `npm ci && npm run build`,
+  served by `pm2 start npm --name rett -- start` (Next `start`, binds 0.0.0.0:3000).
+  PM2 boot-persistence enabled (`systemctl is-enabled pm2-ubuntu` → enabled;
+  `pm2 save` done). Restart on crash is automatic.
+- **Database:** MongoDB 8.0.26, local only (`bindIp 127.0.0.1`, replSet `rs0`,
+  wiredTiger cache 0.25 GB). Auto-starts on boot (`systemctl enable mongod`).
+  Single-node RS is initiated → transactions work (import runs its txn path).
+- **`.env.local` (prod, on box, NOT in git):**
+  `MONGODB_URI=mongodb://127.0.0.1:27017/rett?replicaSet=rs0`,
+  `NEXT_PUBLIC_APP_URL=http://3.15.178.38:3000`. **`ADMIN_SECRET` intentionally
+  unset** so the browser Import button works (no secret a browser could hold).
+- **Disk:** EBS grown 8 GB → **30 GB** (was 100% full and crashed mongod; now ~30%
+  used). **Swap: 4 GB** (`/swapfile` + `/swapfile2`, both in `/etc/fstab`).
 
-### Verified (this session)
+### Critical fix — MongoDB on kernel 6.19+ (SERVER-121912)
 
-- Build/typecheck/lint green. No console errors in the running app.
-- API: profit-sort (computed field), text search, profit/RETT/price filters, single
-  fetch, CSV export (`rett-listings-2026-06.csv`, correct row count).
-- Import pipeline end-to-end against the live server: 2 added, 1 archived, empty row
-  skipped, invalid row + unmatched-sold flagged, target listing flipped to `sold`,
-  transaction committed.
-- UI: desktop layout (navy sidebar, stats, filters, table), detail drawer (profit
-  correctly red on a loss), admin import history (counts match seed), filter
-  interaction (chip + count + refetch), client-side nav + active states, responsive
-  tablet/mobile collapse.
+Ubuntu 26.04's kernel enables Intel CET/Shadow-Stacks by default, which crashes
+MongoDB 8.0 (and it hard-refuses to start). **Fix:** a per-process systemd
+override disables shadow stacks for mongod only —
+`/etc/systemd/system/mongod.service.d/override.conf`:
+```
+[Service]
+Environment=GLIBC_TUNABLES=glibc.cpu.hwcaps=-SHSTK
+```
+No reboot, no kernel downgrade. If MongoDB is ever reinstalled/upgraded, re-apply
+this override or mongod will not start.
+
+### What works (verified live on prod, 2026-07-01)
+
+- **/listings** — grade stat cards (Total 661 / S 4 / A 43 / B 145 / C 469),
+  full-text search, filter pills (grade/state/gain-sort/listed price/LTV/years/loan
+  status/outreached), server-side sort, pagination, CSV export. URL is source of truth.
+- **Detail drawer + /listings/[id]** — metrics, owner contact, financials, extra
+  fields, outreached dropdown, notes thread.
+- **/admin** — .xlsx import with result summary + import history.
+- **Import (the key requirement)** — POST .xlsx to `/api/import`; upsert by
+  (`ownerName` + `address`). Verified on prod: first import **661 added**; re-import
+  of the same file **0 added / 661 updated, 4 blank-grade rows flagged (not lost)** —
+  **assignee (outreachedBy) and notes/comments PRESERVED**, lead data refreshed.
+  Unknown columns are captured verbatim into `extra` (future sheets just work).
+- **Stats cache** — `/api/stats` memoizes counts for 5 min; the import route now
+  **invalidates the cache on every import** (`lib/statsCache.ts`), so the cards
+  update immediately after an import instead of showing a stale value.
+
+## Ops runbook
+
+- **Deploy a code change:** from the Mac repo,
+  `rsync -rlptz --exclude node_modules --exclude .next --exclude .git --exclude .env.local -e "ssh -i <pem>" ./ ubuntu@3.15.178.38:/home/ubuntu/rett-app/`,
+  then on the box: `cd ~/rett-app && npm ci` (only if deps changed) `&& npm run build && pm2 restart rett && pm2 save`.
+- **Import new monthly sheet:** use the website **Import Excel** button (Listings →
+  Import). It cross-references and upserts; existing notes/assignees are safe.
+- **Logs:** `pm2 logs rett`; Mongo: `sudo tail -f /var/log/mongodb/mongod.log`.
+- **Health:** `curl localhost:3000/api/stats`; `pm2 list`; `systemctl is-active mongod`.
+- **Mongo shell:** `mongosh` (localhost). RS status: `mongosh --eval 'rs.status().myState'` (1 = PRIMARY).
 
 ## What's left (prioritized)
 
-1. **Connect MongoDB Atlas** — create a cluster, set `MONGODB_URI` in the host env,
-   run `npm run seed` (or import Brooke's real master sheet via /admin).
-2. **Wire auth** — set `ADMIN_SECRET` to guard `/api/import`, then integrate the
-   staff-portal SSO (the app assumes it sits behind portal auth).
-3. **Deploy** — `npm run build && npm start` on a Node host (or Vercel) with env vars
-   set. No remote/infra is configured yet (see below).
-4. **First real import cycle** with Brooke; validate the master-sheet column names
-   against `lib/schemas/listing.ts` header matching.
-5. **v2 candidates** — map/geo view, per-listing email alerts.
-
-## Git / deploy status
-
-- Local git repo initialized and committed. **No GitHub remote and no deploy target
-  are configured** (this is a fresh local project), so push/deploy were not run.
-  To set them up:
-  ```bash
-  gh repo create brookhaven/rett-opportunities-db --private --source=. --push
-  # then deploy to your Node host / Vercel with MONGODB_URI + NEXT_PUBLIC_APP_URL set
-  ```
+1. **Rotate the SSH key** — `rett-database-website.pem` was pasted in chat; treat as
+   exposed. Create a new key pair, add to the instance, remove the old one.
+2. **Access control decision** — port 3000 is open per the "coworkers from any
+   network, no login" requirement. That exposes real owner PII to anyone who finds
+   the IP. Options when ready: a single shared password via an nginx reverse proxy
+   (no per-user accounts, ~5 min), a VPN, or real staff-portal SSO. No app change
+   needed for the nginx-password option.
+3. **HTTPS** — currently plain HTTP. Add a domain + TLS (Caddy/nginx + Let's Encrypt)
+   so credentials/PII aren't sent in the clear.
+4. **Backups** — schedule `mongodump` (cron) off-box; the data is currently only on
+   the single EBS volume.
+5. **Monitoring** — disk/mem alerts (the box is small; watch PM2 + Mongo logs and
+   disk usage).
 
 ## Gotchas
 
-- The in-memory dev DB is per-process; data resets on server restart (re-seeds).
-- `mlsNumber` sparse-unique index: never store `""` for a missing MLS number.
-- `next dev` here uses webpack (fine on Next 14). On Next 16, use `--webpack`.
+- MongoDB will not start without the `GLIBC_TUNABLES` override (see above).
+- The box is small (~908 MB RAM). The build relies on the 4 GB swap; keep it.
+- In-memory dev DB is per-process (dev only; prod uses the real Mongo).
+- `next dev` uses webpack on Next 14 (fine). On Next 16 use `--webpack`.

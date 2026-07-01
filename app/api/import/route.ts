@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { runImportPipeline } from '@/lib/importPipeline';
+import { invalidateStatsCache } from '@/lib/statsCache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,6 +53,9 @@ export async function POST(req: NextRequest) {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await runImportPipeline(buffer, file.name);
+    // Counts changed — drop the memoized stats so the cards reflect the import
+    // immediately instead of showing a stale value for up to the cache TTL.
+    invalidateStatsCache();
     return NextResponse.json(result, {
       status: result.status === 'failed' ? 500 : 200,
     });

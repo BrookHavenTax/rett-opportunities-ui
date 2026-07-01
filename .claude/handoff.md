@@ -6,11 +6,12 @@ domain is **capital-gains outreach leads**.)_
 
 ## Current state: DEPLOYED TO PRODUCTION on EC2 — live & verified
 
-Public URL: **http://3.15.178.38** (port 80 via nginx → app on 3000). Running under
-PM2, backed by a local MongoDB single-node replica set. 661 real leads loaded from
-the Marketing Deliverable sheet. Green bar (typecheck + lint + prod build) passing.
-_(Requires an inbound security-group rule for TCP 80. Port 3000 can be closed once
-80 is confirmed — nginx is the single entry point going forward.)_
+Public URL: **https://3-15-178-38.sslip.io** (HTTPS via nginx + Let's Encrypt → app
+on 3000; HTTP :80 301-redirects to HTTPS). Running under PM2, backed by a local
+MongoDB single-node replica set. 661 real leads loaded from the Marketing
+Deliverable sheet. Green bar (typecheck + lint + prod build) passing.
+_(Requires inbound security-group rules for TCP 80 **and 443**. Port 3000 can be
+closed — nginx is the single entry point.)_
 
 ### Production infrastructure (EC2)
 
@@ -21,16 +22,20 @@ _(Requires an inbound security-group rule for TCP 80. Port 3000 can be closed on
   served by `pm2 start npm --name rett -- start` (Next `start`, binds 0.0.0.0:3000).
   PM2 boot-persistence enabled (`systemctl is-enabled pm2-ubuntu` → enabled;
   `pm2 save` done). Restart on crash is automatic.
-- **Reverse proxy:** nginx listens on **port 80** and proxies to `127.0.0.1:3000`
-  (`/etc/nginx/sites-available/rett`, symlinked into `sites-enabled`, default site
-  removed). `client_max_body_size 25m` so the .xlsx import isn't blocked. Enabled on
-  boot. This is where the shared-password (basic auth) and TLS will be added later.
+- **Reverse proxy + TLS:** nginx proxies to `127.0.0.1:3000`
+  (`/etc/nginx/sites-available/rett`, default site removed). `client_max_body_size
+  25m` so the .xlsx import isn't blocked. Enabled on boot. **HTTPS** via Let's
+  Encrypt (certbot `--nginx`) for `3-15-178-38.sslip.io` — a free public DNS that
+  maps to the IP (LE won't issue for bare IPs or `amazonaws.com` names). Cert in
+  `/etc/letsencrypt/live/3-15-178-38.sslip.io/`; **auto-renews** via `certbot.timer`
+  (dry-run verified). Port 80 stays open for the ACME renewal challenge + the
+  HTTP→HTTPS redirect. A shared-password (basic auth) can be added here later.
 - **Database:** MongoDB 8.0.26, local only (`bindIp 127.0.0.1`, replSet `rs0`,
   wiredTiger cache 0.25 GB). Auto-starts on boot (`systemctl enable mongod`).
   Single-node RS is initiated → transactions work (import runs its txn path).
 - **`.env.local` (prod, on box, NOT in git):**
   `MONGODB_URI=mongodb://127.0.0.1:27017/rett?replicaSet=rs0`,
-  `NEXT_PUBLIC_APP_URL=http://3.15.178.38` (port-less, matches nginx). **`ADMIN_SECRET` intentionally
+  `NEXT_PUBLIC_APP_URL=https://3-15-178-38.sslip.io` (matches the HTTPS host). **`ADMIN_SECRET` intentionally
   unset** so the browser Import button works (no secret a browser could hold).
 - **Disk:** EBS grown 8 GB → **30 GB** (was 100% full and crashed mongod; now ~30%
   used). **Swap: 4 GB** (`/swapfile` + `/swapfile2`, both in `/etc/fstab`).
@@ -87,8 +92,9 @@ this override or mongod will not start.
    the IP. Options when ready: a single shared password via an nginx reverse proxy
    (no per-user accounts, ~5 min), a VPN, or real staff-portal SSO. No app change
    needed for the nginx-password option.
-3. **HTTPS** — currently plain HTTP. Add a domain + TLS (Caddy/nginx + Let's Encrypt)
-   so credentials/PII aren't sent in the clear.
+3. **HTTPS is on** (sslip.io + Let's Encrypt, auto-renewing). Optional upgrade:
+   point a branded `leads.brookhaven.us` A-record at the IP and reissue the cert
+   (`certbot --nginx -d leads.brookhaven.us`) for a company URL.
 4. **Backups** — schedule `mongodump` (cron) off-box; the data is currently only on
    the single EBS volume.
 5. **Monitoring** — disk/mem alerts (the box is small; watch PM2 + Mongo logs and

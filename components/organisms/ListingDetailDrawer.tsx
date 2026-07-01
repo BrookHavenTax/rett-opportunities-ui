@@ -163,6 +163,14 @@ export function ListingDetailDrawer({ listing, open, onClose, onSetOutreach, onL
               <Row label="Recorded Amount Paid" value={money(listing.recordedAmountPaid)} />
             </div>
 
+            {listing.extra.length > 0 && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-brand-border px-5 py-4 text-sm">
+                {listing.extra.map((e, i) => (
+                  <Row key={i} label={e.label} value={e.value || '—'} />
+                ))}
+              </div>
+            )}
+
             {listing.listingUrl && (
               <div className="px-5 pb-4">
                 <a href={listing.listingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-accent hover:underline">

@@ -87,15 +87,30 @@ function findHeaderRow(sheet: ExcelJS.Worksheet): number {
   return 1;
 }
 
-function buildColumnMap(sheet: ExcelJS.Worksheet, headerRow: number): Map<keyof NewListingRow, number> {
-  const map = new Map<keyof NewListingRow, number>();
+interface ColumnMap {
+  known: Map<keyof NewListingRow, number>;
+  /** Columns with no first-class field — captured verbatim into `extra`. */
+  extra: { label: string; col: number }[];
+}
+
+function buildColumnMap(sheet: ExcelJS.Worksheet, headerRow: number): ColumnMap {
+  const known = new Map<keyof NewListingRow, number>();
+  const extra: { label: string; col: number }[] = [];
+  const seenExtra = new Set<string>();
   sheet.getRow(headerRow).eachCell({ includeEmpty: false }, (cell, col) => {
     const raw = cellValue(cell);
     if (raw == null) return;
-    const field = HEADER_FIELD[norm(String(raw))];
-    if (field && !map.has(field)) map.set(field, col);
+    const label = String(raw).trim();
+    if (!label) return;
+    const field = HEADER_FIELD[norm(label)];
+    if (field) {
+      if (!known.has(field)) known.set(field, col);
+    } else if (!seenExtra.has(norm(label))) {
+      extra.push({ label, col });
+      seenExtra.add(norm(label));
+    }
   });
-  return map;
+  return { known, extra };
 }
 
 type PreparedRow = {
@@ -103,8 +118,14 @@ type PreparedRow = {
   doc: Record<string, unknown>;
 };
 
-function rowToDoc(d: NewListingRow, now: Date, runId: mongoose.Types.ObjectId): Record<string, unknown> {
+function rowToDoc(
+  d: NewListingRow,
+  extra: { label: string; value: string }[],
+  now: Date,
+  runId: mongoose.Types.ObjectId,
+): Record<string, unknown> {
   return {
+    extra,
     grade: d.grade,
     gradeRank: gradeRank(d.grade as never),
     ownerName: d.ownerName,
@@ -171,7 +192,7 @@ export async function runImportPipeline(
     if (!sheet) throw new Error('Workbook has no worksheets.');
 
     const headerRow = findHeaderRow(sheet);
-    const cols = buildColumnMap(sheet, headerRow);
+    const { known: cols, extra: extraCols } = buildColumnMap(sheet, headerRow);
     if (!cols.has('grade') || !cols.has('ownerName') || !cols.has('address')) {
       throw new Error('Could not find the expected header row (Grade / Owner Name / Address).');
     }
@@ -205,9 +226,14 @@ export async function runImportPipeline(
         continue;
       }
       const d = parsed.data;
+      const extra: { label: string; value: string }[] = [];
+      for (const ec of extraCols) {
+        const v = cellValue(row.getCell(ec.col));
+        if (!isBlank(v)) extra.push({ label: ec.label, value: String(v).trim() });
+      }
       prepared.push({
         key: { ownerName: d.ownerName, address: d.address },
-        doc: rowToDoc(d, now, runId),
+        doc: rowToDoc(d, extra, now, runId),
       });
     }
 

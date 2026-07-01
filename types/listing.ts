@@ -28,6 +28,12 @@ export interface ListingComment {
   updatedAt: string;
 }
 
+/** An imported column that isn't a first-class field (future-proofing). */
+export interface ExtraField {
+  label: string;
+  value: string;
+}
+
 /** A single capital-gains outreach lead, serialized for the client. */
 export interface Listing {
   id: string;
@@ -58,6 +64,8 @@ export interface Listing {
   /** Loan-to-value as a 0–1 ratio (e.g. 0.3658 = 36.58%). */
   estLtv?: number | null;
   listingUrl?: string | null;
+  /** Any imported columns not mapped to the fields above. */
+  extra: ExtraField[];
 
   /** Staff member assigned to outreach (null = unassigned). */
   outreachedBy?: OutreachedBy | null;

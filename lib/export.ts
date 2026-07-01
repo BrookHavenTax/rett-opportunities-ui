@@ -36,6 +36,7 @@ function toRow(l: Listing): Record<string, string | number> {
     'Recorded Amount Paid': n(l.recordedAmountPaid),
     'Est. LTV': l.estLtv === null || l.estLtv === undefined ? '' : `${(l.estLtv * 100).toFixed(1)}%`,
     'Listing URL': l.listingUrl ?? '',
+    'Additional Fields': l.extra.map((e) => `${e.label}: ${e.value}`).join(' | '),
     'Outreached By': l.outreachedBy ?? '',
     Notes: l.comments.map((c) => c.body).join(' | '),
   };

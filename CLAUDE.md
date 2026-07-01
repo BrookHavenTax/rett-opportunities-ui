@@ -68,6 +68,9 @@ in-memory replica set and seeds on first boot.
    Invalid rows (e.g. blank Grade) are collected as auditable errors; blank rows are
    skipped silently; a `failed` run is recorded on fatal errors. A non-transactional
    fallback exists only for topologies that genuinely lack transactions.
+   **Unknown columns are future-proofed:** any header not mapped to a first-class
+   field is captured verbatim into `extra: [{label,value}]` (shown in the drawer +
+   permalink, included in CSV export), so future sheets with new columns just work.
 5. **In-memory dev DB is per-process.** The seed script and the dev server are
    separate processes, so seeding happens *inside* the app on first boot
    (`autoSeedIfEmpty` in `lib/mongodb.ts`), not only via `npm run seed`.

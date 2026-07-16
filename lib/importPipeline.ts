@@ -230,7 +230,13 @@ export async function runImportPipeline(
       for (const ec of extraCols) {
         const v = cellValue(row.getCell(ec.col));
         if (!isBlank(v)) {
-          extra.push({ label: ec.label.slice(0, 200), value: String(v).trim().slice(0, 2000) });
+          // Render dates the same way first-class date columns are (YYYY-MM-DD)
+          // rather than the garbled `String(Date)` timezone form.
+          const value =
+            v instanceof Date && !Number.isNaN(v.getTime())
+              ? v.toISOString().slice(0, 10)
+              : String(v).trim();
+          extra.push({ label: ec.label.slice(0, 200), value: value.slice(0, 2000) });
         }
       }
       prepared.push({

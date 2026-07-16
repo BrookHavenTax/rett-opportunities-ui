@@ -8,6 +8,7 @@ import { OutreachSelect } from '@/components/molecules/OutreachSelect';
 import { NotesPanel } from '@/components/organisms/NotesPanel';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { listingsToCsv } from '@/lib/export';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import type { Listing, OutreachedBy } from '@/types/listing';
 
@@ -43,35 +44,6 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function buildCsv(l: Listing): string {
-  const fields: ReadonlyArray<readonly [string, string | number]> = [
-    ['Grade', l.grade],
-    ['Owner Name', l.ownerName],
-    ['LLC Name', l.llcName ?? ''],
-    ['Address', l.address],
-    ['City', l.city],
-    ['State', l.state],
-    ['ZIP', l.zip ?? ''],
-    ['Owner Phone', l.ownerPhone ?? ''],
-    ['Owner Email', l.ownerEmail ?? ''],
-    ['Gain', l.gain],
-    ['Est. Loan Balance', l.estLoanBalance ?? ''],
-    ['Original Sale Price', l.originalSalePrice ?? ''],
-    ['Sale Date', l.saleDate ? l.saleDate.slice(0, 10) : ''],
-    ['Years Since Purchase', l.yearsSincePurchase ?? ''],
-    ['Listed Price', l.listedPrice ?? ''],
-    ['Loan Status', l.loanStatus ?? ''],
-    ['Est. LTV', l.estLtv ?? ''],
-    ['Listing URL', l.listingUrl ?? ''],
-    ['Outreached By', l.outreachedBy ?? ''],
-  ];
-  const esc = (v: string | number) => {
-    const s = String(v);
-    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return `${fields.map(([k]) => esc(k)).join(',')}\r\n${fields.map(([, v]) => esc(v)).join(',')}\r\n`;
-}
-
 export function ListingDetailDrawer({ listing, open, onClose, onSetOutreach, onListingUpdate }: ListingDetailDrawerProps) {
   const handleCopyLink = async () => {
     if (!listing) return;
@@ -85,7 +57,7 @@ export function ListingDetailDrawer({ listing, open, onClose, onSetOutreach, onL
   };
   const handleExport = () => {
     if (!listing) return;
-    const blob = new Blob([buildCsv(listing)], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([listingsToCsv([listing])], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

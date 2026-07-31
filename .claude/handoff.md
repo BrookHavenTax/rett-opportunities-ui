@@ -138,6 +138,31 @@ in the tree. Verified `npm ci` reproduces them on the box's npm 10.
   advisory makes `npm audit` fan out to ~22 entries because it has no fix —
   that number is an artifact, not a regression.
 
+### The box is being actively scanned (observed 2026-07-30)
+
+Not theoretical — the public URL has been found and is being probed:
+
+- **146 `Failed to find Server Action` errors** in `~/.pm2/logs/rett-error.log`.
+  This app has **no** `'use server'` anywhere, so no legitimate client can ever
+  send a `Next-Action` header. Every one of these is an external probe for the
+  Next.js Server Action vulnerability class (GHSA-m99w-x7hq-7vfj,
+  GHSA-89xv-2m56-2m9x, GHSA-955p-x3mx-jcvp).
+- **18 `POST /` requests from 13+ distinct IPs** across the retained nginx logs,
+  plus `CensysInspect` in the user agents — i.e. internet-wide scanners have the
+  host indexed.
+
+They currently fail closed because the app has no Server Actions to hit. But this
+is the concrete argument that **access control (What's left #3) is the highest-value
+security work here, ahead of even the Next upgrade** — the app serves names, home
+addresses, phone numbers, emails and loan details for 1,178 real people to anyone
+who sends a GET. The nginx shared-password option is ~5 minutes and needs no app
+change. Useful checks:
+
+```bash
+grep -c "Failed to find Server Action" ~/.pm2/logs/rett-error.log
+sudo grep -a "POST / HTTP" /var/log/nginx/access.log | awk '{print $1}' | sort | uniq -c | sort -rn
+```
+
 ## Ops runbook
 
 - **Deploy a code change** (the box is rsync-deployed — there is **no git repo** on
@@ -184,11 +209,13 @@ in the tree. Verified `npm ci` reproduces them on the box's npm 10.
    justifies. 15.5.22 patches every currently-open advisory.
 2. **Rotate the SSH key** — `rett-database-website.pem` was pasted in chat; treat as
    exposed. Create a new key pair, add to the instance, remove the old one.
-3. **Access control decision** — port 3000 is open per the "coworkers from any
-   network, no login" requirement. That exposes real owner PII to anyone who finds
-   the IP. Options when ready: a single shared password via an nginx reverse proxy
-   (no per-user accounts, ~5 min), a VPN, or real staff-portal SSO. No app change
-   needed for the nginx-password option.
+3. **Access control decision** — the site is public with no login per the
+   "coworkers from any network, no login" requirement. That exposes real owner PII
+   to anyone who finds the URL, and the box **is already being scanned** (see "The
+   box is being actively scanned" above). Options when ready: a single shared
+   password via nginx basic auth (no per-user accounts, ~5 min, no app change), a
+   VPN, or real staff-portal SSO. Arguably this should be #1 — it is cheaper than
+   the Next upgrade and closes a larger hole.
 4. **HTTPS is on** (sslip.io + Let's Encrypt, auto-renewing). Optional upgrade:
    point a branded `leads.brookhaven.us` A-record at the IP and reissue the cert
    (`certbot --nginx -d leads.brookhaven.us`) for a company URL.

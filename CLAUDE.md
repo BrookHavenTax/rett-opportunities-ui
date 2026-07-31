@@ -33,17 +33,21 @@ old terms; the model + UI are the source of truth.
   price/LTV/years/loan status/outreached), CSV export, synthetic seed. Typecheck +
   lint + build green. The real Marketing Deliverable file was ingested live (326
   added, 4 grade-blank rows flagged) and verified in the running app.
-- **DEPLOYED TO PROD (2026-07-01):** live on EC2 at **http://3.15.178.38:3000**
-  under PM2 (boot-persistent), backed by a **local MongoDB single-node replica set**
-  (not Atlas). 661 real leads loaded via the website Import; re-import verified on
-  prod to preserve `outreachedBy` + comments. See `.claude/handoff.md` for the full
-  infra/ops runbook. Key detail: Ubuntu 26.04's kernel needs a
-  `GLIBC_TUNABLES=glibc.cpu.hwcaps=-SHSTK` systemd override for mongod to start
-  (SERVER-121912) — without it MongoDB will not run. Stats cache is now invalidated
-  on import (`lib/statsCache.ts`).
-- **Not yet done:** SSH key rotation (pem was exposed in chat), access control
-  (port 3000 is open per the no-login/coworkers requirement — PII exposure risk),
-  HTTPS/TLS, off-box Mongo backups, monitoring.
+- **DEPLOYED TO PROD (latest ship 2026-07-30, commit `7c5ab3b`):** live on EC2 at
+  **https://3-15-178-38.sslip.io** (nginx + Let's Encrypt terminate TLS and proxy to
+  the app on 127.0.0.1:3000; HTTP :80 301-redirects on that hostname). Under PM2
+  (boot-persistent), backed by a **local MongoDB single-node replica set** (not
+  Atlas). **1,178 real leads** live (S 5 / A 55 / B 211 / C 907), loaded via the
+  website Import; re-import verified on prod to preserve `outreachedBy` + comments.
+  The box has **no git repo** — it is rsync-deployed from the Mac working tree. See
+  `.claude/handoff.md` for the full infra/ops runbook. Key detail: Ubuntu 26.04's
+  kernel needs a `GLIBC_TUNABLES=glibc.cpu.hwcaps=-SHSTK` systemd override for
+  mongod to start (SERVER-121912) — without it MongoDB will not run. Stats cache is
+  invalidated on import (`lib/statsCache.ts`).
+- **Not yet done:** SSH key rotation (pem was exposed in chat), access control (the
+  site is public with no login per the coworkers-from-any-network requirement —
+  real owner PII is exposed to anyone who finds the URL), off-box Mongo backups,
+  monitoring. _(HTTPS/TLS is DONE — cert auto-renews via `certbot.timer`.)_
 
 ## How to run / test
 

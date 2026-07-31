@@ -1,15 +1,21 @@
 # Handoff — Capital-Gains Outreach (BrookHaven)
 
-_Last updated: 2026-07-01. Single source of truth for the project's current state._
+_Last updated: 2026-07-30. Single source of truth for the project's current state._
 _(Repo/routes are still named `rett-*` / `/listings` / `Listing` internally; the
 domain is **capital-gains outreach leads**.)_
 
 ## Current state: DEPLOYED TO PRODUCTION on EC2 — live & verified
 
 Public URL: **https://3-15-178-38.sslip.io** (HTTPS via nginx + Let's Encrypt → app
-on 3000; HTTP :80 301-redirects to HTTPS). Running under PM2, backed by a local
-MongoDB single-node replica set. 661 real leads loaded from the Marketing
-Deliverable sheet. Green bar (typecheck + lint + prod build) passing.
+on 3000; HTTP :80 301-redirects to HTTPS — note the redirect is keyed on the
+`sslip.io` server_name, so hitting the bare IP over HTTP correctly 404s on
+certbot's catch-all). Running under PM2, backed by a local MongoDB single-node
+replica set. **1,178 real leads** live (S 5 / A 55 / B 211 / C 907) after
+subsequent Marketing Deliverable imports. Green bar (typecheck + lint + prod
+build) passing.
+
+**Deployed commit: `7c5ab3b`** ("Reuse shared CSV builder in lead drawer; format
+dates in extra columns"), shipped 2026-07-30. Cert valid to 2026-09-29.
 _(Requires inbound security-group rules for TCP 80 **and 443**. Port 3000 can be
 closed — nginx is the single entry point.)_
 
@@ -72,9 +78,23 @@ this override or mongod will not start.
 
 ## Ops runbook
 
-- **Deploy a code change:** from the Mac repo,
-  `rsync -rlptz --exclude node_modules --exclude .next --exclude .git --exclude .env.local -e "ssh -i <pem>" ./ ubuntu@3.15.178.38:/home/ubuntu/rett-app/`,
-  then on the box: `cd ~/rett-app && npm ci` (only if deps changed) `&& npm run build && pm2 restart rett && pm2 save`.
+- **Deploy a code change** (the box is rsync-deployed — there is **no git repo** on
+  it, so the Mac working tree is the deploy source; `git pull` locally first):
+  1. Green bar on the Mac **before** shipping: `npm run typecheck && npm run lint && npm run build`.
+  2. Rollback snapshot on the box (`.next` is the live serving artifact — a failed
+     rebuild would otherwise leave prod serving a half-written build):
+     `cd ~/rett-app && rm -rf .next.prev && cp -a .next .next.prev`.
+  3. `rsync -rlptz --exclude node_modules --exclude .next --exclude .git --exclude .env.local --exclude .claude --exclude tsconfig.tsbuildinfo -e "ssh -i <pem>" ./ ubuntu@3.15.178.38:/home/ubuntu/rett-app/`
+     — dry-run it first with `--dry-run --itemize-changes`. Excluding `.env.local`
+     is what protects prod's DB URI; excluding `tsconfig.tsbuildinfo` keeps the
+     Mac's incremental-tsc cache from poisoning the box's type check.
+  4. On the box: `cd ~/rett-app && npm ci` (**only** if package-lock changed — if
+     rsync didn't transfer it, skip) `&& npm run build && pm2 restart rett --update-env && pm2 save`.
+  5. Smoke: loopback `/api/stats`, `/listings`, `/admin`, `/api/listings`, then
+     public HTTPS on all three + `/api/export`. Confirm the lead total is unchanged.
+  - **Rollback:** `rm -rf .next && mv .next.prev .next && pm2 restart rett`, then
+    re-rsync from the previous commit. Exactly one snapshot is kept (step 2 clears
+    the prior one), so this costs ~92 MB steady-state.
 - **Import new monthly sheet:** use the website **Import Excel** button (Listings →
   Import). It cross-references and upserts; existing notes/assignees are safe.
 - **nginx:** config at `/etc/nginx/sites-available/rett`; after edits

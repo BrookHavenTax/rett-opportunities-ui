@@ -14,8 +14,8 @@ replica set. **1,178 real leads** live (S 5 / A 55 / B 211 / C 907) after
 subsequent Marketing Deliverable imports. Green bar (typecheck + lint + prod
 build) passing.
 
-**Deployed commit: `7c5ab3b`** ("Reuse shared CSV builder in lead drawer; format
-dates in extra columns"), shipped 2026-07-30. Cert valid to 2026-09-29.
+**Deployed commit: `469d78b`** ("Security: patch reachable dependency advisories"),
+shipped 2026-07-30. Cert valid to 2026-09-29.
 _(Requires inbound security-group rules for TCP 80 **and 443**. Port 3000 can be
 closed — nginx is the single entry point.)_
 
@@ -76,6 +76,68 @@ this override or mongod will not start.
   **invalidates the cache on every import** (`lib/statsCache.ts`), so the cards
   update immediately after an import instead of showing a stale value.
 
+## Dependency security posture (triaged 2026-07-30)
+
+GitHub reported 37 Dependabot alerts. Counted by *reachability from the public
+request path* rather than raw volume, almost all are noise. What matters:
+
+**Patched and shipped (`469d78b`):**
+
+| Package | Change | Advisories | Reachability |
+|---|---|---|---|
+| `mongoose` | 8.24.0 → 8.24.2 | GHSA-664h-wqgq-64gw | Runtime, but **not directly exploitable** — see below |
+| `postcss` | 8.5.15 → 8.5.25 | GHSA-qx2v-qp2m-jg93, GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849 | Build-time only |
+| `brace-expansion` | 1.1.15/2.1.1/5.0.6 → 1.1.18/2.1.4/5.0.9 | GHSA-3jxr-9vmj-r5cp | Dev toolchain |
+| `glob` | 10.3.10 → 10.5.0 | GHSA-5j98-mcp5-4vw2 | Dev toolchain (advisory is the glob **CLI**, never invoked) |
+| `js-yaml` | 4.2.0 → 4.3.0 | GHSA-52cp-r559-cp3m | Dev toolchain (eslint config parsing) |
+
+The mongoose prototype-pollution advisory needs an attacker-controlled
+`__proto__`-prefixed dotted path to reach update casting. **No route allows
+that**: every mutation zod-validates the body and then builds an explicit
+`$set` from fixed keys (`app/api/listings/[id]/route.ts`), and the import
+pipeline's unknown columns land in an `extra: [{label,value}]` **array**, never
+as object paths (invariant #4 is what protects this). Probed live with four
+`__proto__`/`constructor.prototype` payloads: rejected 400 or silently
+stripped, no pollution. The bump is defense-in-depth.
+
+postcss is build-time only — it appears under `next/dist/build/`, never
+`next/dist/server/`. `next start` does not run it, so no attacker CSS reaches
+it. The `"postcss": "$postcss"` override collapses next's pinned 8.4.31 into
+our 8.5.25; **emitted CSS is byte-identical** before/after (verified by hash).
+
+**`package.json` `overrides` — why they exist.** Scoped per major
+(`brace-expansion@1`, `glob@10`, …) so no consumer is forced onto a breaking
+major. Do not "simplify" them to bare package names: `brace-expansion` 5.x
+changes `require()` from a function to an object and breaks every `minimatch`
+in the tree. Verified `npm ci` reproduces them on the box's npm 10.
+
+**Deliberately still open:**
+
+- **`next` 14.2.35 — 21 advisories, no fix available on the 14.x line.** Every
+  one is first patched in 15.5.x or 16.x; 14.2.35 is the last 14.x release, so
+  the branch is EOL for security backports. Most are unreachable here anyway —
+  the app has **no middleware, no Server Actions, no `next/image`, no
+  rewrites/redirects/i18n, no `pages/`, and every API route pins
+  `runtime = 'nodejs'`** — which rules out the middleware-bypass, Server-Action,
+  Image-Optimizer, rewrite-SSRF and Edge-payload classes outright. What *is*
+  plausibly reachable is the RSC/App-Router set: DoS via RSC request
+  deserialization (GHSA-h25m-26qc-wcjf, GHSA-q4gf-8mx6-v5v3, GHSA-8h8q-6873-q5fj)
+  and RSC response cache confusion/poisoning (GHSA-68g3-v927-f742,
+  GHSA-4633-3j49-mh5q, GHSA-wfc6-r584-vfw7). On an unauthenticated public app
+  serving real PII, the DoS ones are the practical risk. **Fix = upgrade to Next
+  15.5.22** (see "What's left" #1). Not bundled here: a major bump on a 908 MB
+  box needs its own build + verify cycle.
+- **`uuid` <11.1.1 (GHSA-w5hq-g745-h8pq) — unreachable.** The flaw needs v3/v5/v6
+  with a `buf` argument; exceljs calls `uuidv4()` with no arguments, in the
+  conditional-formatting **write** path, and this app only ever *reads* .xlsx.
+  The only npm-offered "fix" is exceljs@3.4.0 — a **downgrade**. Ignore it.
+- **`brace-expansion` GHSA-mh99-v99m-4gvg on the 1.x/2.x lines — no upstream
+  fix.** The sole patch is 5.0.8, and 5.x is API-breaking for minimatch. Not
+  reachable: the only runtime path is exceljs → archiver → readdir-glob, and
+  archiver is the xlsx *writer*, which this app never calls. Note this one
+  advisory makes `npm audit` fan out to ~22 entries because it has no fix —
+  that number is an artifact, not a regression.
+
 ## Ops runbook
 
 - **Deploy a code change** (the box is rsync-deployed — there is **no git repo** on
@@ -105,20 +167,44 @@ this override or mongod will not start.
 
 ## What's left (prioritized)
 
-1. **Rotate the SSH key** — `rett-database-website.pem` was pasted in chat; treat as
+1. **Upgrade Next 14.2.35 → 15.5.22** (own session). This is the only way to close
+   the 21 `next` advisories — there is no 14.x patch. Scope: App Router 14→15 is a
+   moderate migration; the breaking changes that touch this repo are (a) `params`
+   in dynamic routes becomes a Promise — affects `app/api/listings/[id]/route.ts`,
+   both comments routes, and `app/listings/[id]/page.tsx`; (b)
+   `experimental.serverComponentsExternalPackages` moves to the stable
+   `serverExternalPackages` key in `next.config.mjs` (mongoose/exceljs depend on
+   it); (c) fetch/route-handler caching stops defaulting to cached — the API routes
+   already set `dynamic = 'force-dynamic'`, so that one should be a no-op. Also
+   bump `eslint-config-next` in lockstep (that clears the glob/@next-plugin
+   alerts). **Build on the box needs watching: 908 MB RAM + 4 GB swap**, and the
+   Next 15 build is heavier than 14 — take the `.next.prev` snapshot first and be
+   ready to roll back. Do NOT jump to 16: it wants a newer toolchain and
+   `next dev --webpack` handling, which is a bigger change than the security need
+   justifies. 15.5.22 patches every currently-open advisory.
+2. **Rotate the SSH key** — `rett-database-website.pem` was pasted in chat; treat as
    exposed. Create a new key pair, add to the instance, remove the old one.
-2. **Access control decision** — port 3000 is open per the "coworkers from any
+3. **Access control decision** — port 3000 is open per the "coworkers from any
    network, no login" requirement. That exposes real owner PII to anyone who finds
    the IP. Options when ready: a single shared password via an nginx reverse proxy
    (no per-user accounts, ~5 min), a VPN, or real staff-portal SSO. No app change
    needed for the nginx-password option.
-3. **HTTPS is on** (sslip.io + Let's Encrypt, auto-renewing). Optional upgrade:
+4. **HTTPS is on** (sslip.io + Let's Encrypt, auto-renewing). Optional upgrade:
    point a branded `leads.brookhaven.us` A-record at the IP and reissue the cert
    (`certbot --nginx -d leads.brookhaven.us`) for a company URL.
-4. **Backups** — schedule `mongodump` (cron) off-box; the data is currently only on
+5. **Backups** — schedule `mongodump` (cron) off-box; the data is currently only on
    the single EBS volume.
-5. **Monitoring** — disk/mem alerts (the box is small; watch PM2 + Mongo logs and
+6. **Monitoring** — disk/mem alerts (the box is small; watch PM2 + Mongo logs and
    disk usage).
+7. **Import: header named `constructor` is silently dropped** (minor, found
+   2026-07-30). `HEADER_FIELD[norm(label)]` in `lib/importPipeline.ts` is a plain
+   object literal, so a column header normalizing to `constructor` resolves to
+   `Object.prototype.constructor` — truthy — and takes the "known field" branch
+   instead of being captured into `extra`, violating invariant #4 for that one
+   column. Not a security issue (it's a `Map` set, nothing writes to a prototype;
+   `__proto__` normalizes to `proto` and is unaffected). Fix: `Object.create(null)`
+   for the map or an `Object.prototype.hasOwnProperty.call` guard, plus a
+   regression test.
 
 ## Gotchas
 

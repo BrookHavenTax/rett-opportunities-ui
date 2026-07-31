@@ -33,7 +33,7 @@ old terms; the model + UI are the source of truth.
   price/LTV/years/loan status/outreached), CSV export, synthetic seed. Typecheck +
   lint + build green. The real Marketing Deliverable file was ingested live (326
   added, 4 grade-blank rows flagged) and verified in the running app.
-- **DEPLOYED TO PROD (latest ship 2026-07-30, commit `7c5ab3b`):** live on EC2 at
+- **DEPLOYED TO PROD (latest ship 2026-07-30, commit `469d78b`):** live on EC2 at
   **https://3-15-178-38.sslip.io** (nginx + Let's Encrypt terminate TLS and proxy to
   the app on 127.0.0.1:3000; HTTP :80 301-redirects on that hostname). Under PM2
   (boot-persistent), backed by a **local MongoDB single-node replica set** (not
@@ -44,10 +44,13 @@ old terms; the model + UI are the source of truth.
   kernel needs a `GLIBC_TUNABLES=glibc.cpu.hwcaps=-SHSTK` systemd override for
   mongod to start (SERVER-121912) — without it MongoDB will not run. Stats cache is
   invalidated on import (`lib/statsCache.ts`).
-- **Not yet done:** SSH key rotation (pem was exposed in chat), access control (the
-  site is public with no login per the coworkers-from-any-network requirement —
-  real owner PII is exposed to anyone who finds the URL), off-box Mongo backups,
-  monitoring. _(HTTPS/TLS is DONE — cert auto-renews via `certbot.timer`.)_
+- **Not yet done:** **Next 14 → 15.5.22 upgrade** (top priority — Next 14.2.35 is
+  EOL for security backports and carries 21 unpatchable advisories; see
+  `.claude/handoff.md` "Dependency security posture" + "What's left" #1), SSH key
+  rotation (pem was exposed in chat), access control (the site is public with no
+  login per the coworkers-from-any-network requirement — real owner PII is exposed
+  to anyone who finds the URL), off-box Mongo backups, monitoring. _(HTTPS/TLS is
+  DONE — cert auto-renews via `certbot.timer`.)_
 
 ## How to run / test
 
@@ -95,6 +98,14 @@ in-memory replica set and seeds on first boot.
 
 - **No `multer`.** App Router uploads use native `request.formData()` in
   `app/api/import/route.ts`. multer is Express-coupled and wrong for this runtime.
+- **`package.json` `overrides` are load-bearing** (added 2026-07-30 to patch
+  advisories). They are scoped *per major* — `brace-expansion@1`, `glob@10`,
+  `js-yaml@4` — plus `"postcss": "$postcss"` to dedupe next's pinned 8.4.31 into
+  ours. Do not collapse them to bare package names: `brace-expansion` 5.x changes
+  `require()` from a function to an object and breaks every `minimatch` consumer.
+  `npm audit` reporting ~22 entries is an artifact of one unfixable advisory
+  (GHSA-mh99) fanning out, not a regression — read
+  `.claude/handoff.md` "Dependency security posture" before touching these.
 
 ## Test / verification files
 

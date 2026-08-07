@@ -33,7 +33,7 @@ old terms; the model + UI are the source of truth.
   price/LTV/years/loan status/outreached), CSV export, synthetic seed. Typecheck +
   lint + build green. The real Marketing Deliverable file was ingested live (326
   added, 4 grade-blank rows flagged) and verified in the running app.
-- **DEPLOYED TO PROD (latest ship 2026-07-30, commit `469d78b`):** live on EC2 at
+- **DEPLOYED TO PROD (latest ship 2026-07-30, commit `b0f250b`):** live on EC2 at
   **https://3-15-178-38.sslip.io** (nginx + Let's Encrypt terminate TLS and proxy to
   the app on 127.0.0.1:3000; HTTP :80 301-redirects on that hostname). Under PM2
   (boot-persistent), backed by a **local MongoDB single-node replica set** (not

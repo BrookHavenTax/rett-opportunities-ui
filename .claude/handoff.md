@@ -14,7 +14,7 @@ replica set. **1,178 real leads** live (S 5 / A 55 / B 211 / C 907) after
 subsequent Marketing Deliverable imports. Green bar (typecheck + lint + prod
 build) passing.
 
-**Deployed commit: `469d78b`** ("Security: patch reachable dependency advisories"),
+**Deployed commit: `b0f250b`** ("Security: patch reachable dependency advisories"),
 shipped 2026-07-30. Cert valid to 2026-09-29.
 _(Requires inbound security-group rules for TCP 80 **and 443**. Port 3000 can be
 closed — nginx is the single entry point.)_
@@ -81,7 +81,7 @@ this override or mongod will not start.
 GitHub reported 37 Dependabot alerts. Counted by *reachability from the public
 request path* rather than raw volume, almost all are noise. What matters:
 
-**Patched and shipped (`469d78b`):**
+**Patched and shipped (`b0f250b`):**
 
 | Package | Change | Advisories | Reachability |
 |---|---|---|---|
